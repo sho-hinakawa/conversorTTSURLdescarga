@@ -11,8 +11,9 @@ Este script en Python permite convertir un archivo WorkshopUpload de Tabletop Si
 - Verifica que sean URLs unicas
 - Detecta extensiones de los archivos segun su cabecera descargada y le asiga el MIME Type correspondiente
   a los correspondientes a TTS
-- Descarga las URLs indicando nombre del campo de datos en un directorio especificado por el usuario
-- Posee metodo debug para guardar errores y entregar los archivos CSV y TXT de los pasos anteriores
+- Descarga las URLs indicando nombre del campo de datos utilizando el metodo HTTP GET a un directorio especificado por el usuario
+- Identifica la extension del archivo identificando la cabecera leyendo los primeros 4096 bytes del archivo y comparandolos con archivos conocidos de TTS
+- Posee metodo debug para entregar mensajes en pantalla, guardar errores y almacenar los archivos CSV y TXT de los pasos anteriores
 
 ## Requisitos
 - **Python**: Versión 3.6 o superior.
