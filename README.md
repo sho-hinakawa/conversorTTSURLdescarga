@@ -16,6 +16,9 @@ Este script en Python permite convertir un archivo WorkshopUpload de Tabletop Si
 
 ## Requisitos
 - **Python**: Versión 3.6 o superior.
-- **Librería `requests`**: ```bash pip install requests```
+- **Librería `requests`**:
+```bash
+ pip install requests
+```
    
 
