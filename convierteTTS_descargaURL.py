@@ -310,7 +310,7 @@ def download_file(url, download_path, index, pattern, log_file_path, downloaded_
 
 # Paso 1: Coordinar ejecucion del programa
 def main():
-    input_file = input("Ingrese el nombre del archivo WorkshopUpload: ").strip()
+    input_file = input("Ingrese el nombre del archivo WorkshopUpload (sin extension): ").strip()
     base_name = os.path.splitext(input_file)[0]
     download_path = input("Ingrese el directorio donde se guardaran los archivos descargados: ").strip()
     if not os.path.exists(download_path):  # Corrected from downloadembry
