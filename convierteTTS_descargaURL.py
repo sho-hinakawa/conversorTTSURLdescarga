@@ -1,8 +1,12 @@
-# Script para convertir el archivo binario de Tabletop Simulator obtenido desde https://steamworkshopdownloader.io/
-# en un archivo de texto plano desde el cual se extrae segun los campos de datos las URLs y se almacenan en un archivo CSV
-# al cual son reemplazadas las URLs por URLs validas para la descarga y se descargan usando el metodo GET en un 
-# directorio designado por el usuario, tambien se almacenan los enlaces desde los cuales se descargo, posee un metodo 
-# debug en el que guarda los errores, y se guardan los archivos CSV y TXT de los pasos intermedios. 
+# Script para convertir el archivo binario de Tabletop Simulator obtenido desde 
+# https://steamworkshopdownloader.io/ en un archivo de texto plano desde el cual 
+# se extrae segun los campos de datos las URLs y se almacenan en un archivo CSV
+# al cual son reemplazadas las URLs por URLs validas para la descarga y se 
+# descargan usando el metodo GET en un directorio designado por el usuario, 
+# tambien se almacenan los enlaces desde los cuales se descargo, posee un metodo 
+# debug en el que guarda los errores, y se guardan los archivos CSV y TXT de los 
+# pasos intermedios. 
+
 # Creditos: Telegram @hinakawa
 
 # Todas las funciones y los pasos estan comentados para mayor entendimiento
