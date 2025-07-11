@@ -12,7 +12,8 @@
 # Todas las funciones y los pasos estan comentados para mayor entendimiento
 
 # Paso 1: La funcion principal() es el punto de entrada del script.
-# - Solicita al usuario el nombre del archivo de entrada, el directorio de descarga y si desea activar el modo depuracion.
+# - Solicita al usuario el nombre del archivo de entrada, el directorio de descarga 
+# y si desea activar el modo depuracion.
 # - Configura las rutas para los archivos de log y salida CSV.
 # - Inicia el proceso llamando a extraer_urls_desde_tts_binario().
 def principal():
