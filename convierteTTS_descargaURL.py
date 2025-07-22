@@ -6,10 +6,17 @@
 # tambien se almacenan los enlaces desde los cuales se descargo, posee un metodo 
 # debug en el que guarda los errores, y se guardan los archivos CSV y TXT de los 
 # pasos intermedios. 
-
 # Creditos: Telegram @hinakawa
-
 # Todas las funciones y los pasos estan comentados para mayor entendimiento
+
+import re
+import os
+import csv
+import mimetypes
+import requests
+from urllib.parse import urlparse
+
+
 
 # Paso 1: La funcion principal() es el punto de entrada del script.
 # - Solicita al usuario el nombre del archivo de entrada, el directorio de descarga 
