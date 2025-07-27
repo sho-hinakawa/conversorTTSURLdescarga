@@ -1,17 +1,16 @@
-# Script para convertir el archivo binario de Tabletop Simulator obtenido desde 
-# https://steamworkshopdownloader.io/ en un archivo de texto plano desde el cual 
-# se extrae segun los campos de datos las URLs y se almacenan en un archivo CSV
-# al cual son reemplazadas las URLs por URLs validas para la descarga y se 
-# descargan usando el metodo GET en un directorio designado por el usuario, 
-# tambien se almacenan los enlaces desde los cuales se descargo, posee un metodo 
-# debug en el que guarda los errores, y se guardan los archivos CSV y TXT de los 
-# pasos intermedios. 
+# Script para descargar un mod de Tabletop Simulator usando su ID de la Workshop.
+# Primero, descarga el archivo principal (.bin) usando una API externa.
+# Luego, extrae todas las URLs de los assets (imágenes, modelos 3D, etc.) de ese archivo.
+# Reemplaza las URLs antiguas por unas válidas y descarga todos los assets
+# en un directorio designado por el usuario.
+#
 # Creditos: Telegram @hinakawa
 # Todas las funciones y los pasos estan comentados para mayor entendimiento
 
 import re
 import os
 import csv
+import json
 import mimetypes
 import requests
 import logging
@@ -127,11 +126,9 @@ def extract_urls_from_tts_binary(input_file, output_file, download_path, debug_m
 
 # Reemplaza URLs específicas en un archivo CSV y guarda el resultado en un nuevo CSV
 def replace_urls_in_csv(input_file, output_filename, download_path, debug_mode=False):
-    # Obtener el directorio del archivo de entrada
     input_dir = os.path.dirname(input_file) or '.'
     archivo_salida_csv = os.path.join(input_dir, output_filename)
     
-    # Verificar permisos de escritura en el directorio del archivo de entrada
     if not os.access(input_dir, os.W_OK):
         error_message = f"No se tienen permisos de escritura en el directorio {input_dir}"
         logging.error(error_message)
@@ -139,7 +136,6 @@ def replace_urls_in_csv(input_file, output_filename, download_path, debug_mode=F
         return None, 0
     
     try:
-        # Leer el archivo CSV de entrada
         with open(input_file, 'r', encoding='utf-8-sig') as archivo_entrada:
             lector_csv = csv.reader(archivo_entrada)
             filas = list(lector_csv)
@@ -153,7 +149,6 @@ def replace_urls_in_csv(input_file, output_filename, download_path, debug_mode=F
         if debug_mode:
             logging.debug(f"Se leyeron {len(filas)} filas del CSV {input_file}")
         
-        # Procesar las filas, reemplazar URLs y eliminar duplicados
         urls_vistas = set()
         filas_reemplazadas = []
         
@@ -164,18 +159,15 @@ def replace_urls_in_csv(input_file, output_filename, download_path, debug_mode=F
             
             patron, url = fila[0], fila[1]
             
-            # Reemplazar la URL (insensible a mayúsculas/minúsculas)
             if 'cloud-3.steamusercontent.com' in url.lower():
                 url_modificada = url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net')
             else:
                 url_modificada = url
             
-            # Añadir solo si la URL no ha sido vista
             if url_modificada not in urls_vistas:
                 urls_vistas.add(url_modificada)
                 filas_reemplazadas.append([patron, url_modificada])
         
-        # Escribir el archivo CSV de salida
         with open(archivo_salida_csv, 'w', encoding='utf-8-sig', newline='') as archivo_salida:
             escritor_csv = csv.writer(archivo_salida)
             if filas_reemplazadas:
@@ -183,7 +175,6 @@ def replace_urls_in_csv(input_file, output_filename, download_path, debug_mode=F
             else:
                 escritor_csv.writerow(["Mensaje", "No se encontraron URLs válidas o todas eran duplicadas"])
         
-        # Imprimir resumen
         print("\nResumen de procesamiento:")
         print(f"Filas procesadas: {len(filas)}")
         print(f"Reemplazos realizados: {len(filas_reemplazadas)}")
@@ -193,16 +184,6 @@ def replace_urls_in_csv(input_file, output_filename, download_path, debug_mode=F
 
     except FileNotFoundError as e:
         error_message = f"No se pudo encontrar el archivo {e.filename}"
-        logging.error(error_message)
-        print(f"Error: {error_message}")
-        return None, 0
-    except PermissionError as e:
-        error_message = f"No se tienen permisos para leer/escribir los archivos: {str(e)}"
-        logging.error(error_message)
-        print(f"Error: {error_message}")
-        return None, 0
-    except csv.Error as e:
-        error_message = f"Error al procesar el archivo CSV: {str(e)}"
         logging.error(error_message)
         print(f"Error: {error_message}")
         return None, 0
@@ -450,16 +431,60 @@ def main():
     debug_mode = debug_input in ['si', 's']
     if debug_mode:
         print("Modo debug activado. Se almacenaran los archivos CSV y se generarán logs detallados.")
+
+    # --- INICIO: LÓGICA NUEVA PARA DESCARGAR DESDE WORKSHOP ID ---
+    workshop_id = input("Ingrese el ID del Workshop de Steam: ").strip()
+    if not workshop_id.isdigit():
+        print("Error: El ID del workshop debe ser un número.")
+        return
+
+    # Construir URL de la API y obtener información
+    api_url = f"https://www.steamworkshopdownloader.cc/json?url=https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
+    workshop_binary_path = f"{workshop_id}.bin" # Nombre del archivo a descargar
     
-    input_file = input("Ingrese el nombre del archivo WorkshopUpload (sin extensión): ").strip()
+    try:
+        print(f"Obteniendo información para el ID: {workshop_id}...")
+        response = requests.get(api_url, timeout=15)
+        response.raise_for_status() # Lanza un error si la petición falla (e.g. 404, 500)
+        data = response.json()
+        
+        workshop_title = data.get("title", "WorkshopItem")
+        download_url = data.get("download_url")
+
+        if not download_url:
+            print("Error: No se pudo obtener la URL de descarga desde la API.")
+            logging.error("No se encontró 'download_url' en la respuesta de la API.")
+            return
+
+        print(f"Descargando archivo principal de '{workshop_title}'...")
+        workshop_response = requests.get(download_url, timeout=60)
+        workshop_response.raise_for_status()
+
+        with open(workshop_binary_path, 'wb') as f:
+            f.write(workshop_response.content)
+        
+        print(f"Archivo principal '{workshop_binary_path}' descargado correctamente.")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error al contactar la API o descargar el archivo principal: {e}")
+        logging.error(f"Error de red para ID {workshop_id}: {e}")
+        return
+    except json.JSONDecodeError:
+        print("Error: La respuesta de la API no es un JSON válido.")
+        logging.error("Error al decodificar JSON de la API.")
+        return
+    # --- FIN: LÓGICA NUEVA ---
+
+    download_path = input("Ingrese el directorio donde se guardarán los assets descargados: ").strip()
     
-    download_path = input("Ingrese el directorio donde se guardarán los archivos descargados: ").strip()
-    
-    input_file_lower = input_file.lower()
+    # Usar el ID del workshop como nombre base para los archivos de salida
+    input_file_base_name = workshop_id
+
+    # Evitar que el directorio de descarga se llame igual que el archivo de entrada
     directory_name = os.path.basename(os.path.normpath(download_path)).lower()
-    if directory_name == input_file_lower:
+    if directory_name == input_file_base_name.lower():
         download_path = os.path.join(os.path.dirname(download_path) or '.', f"{os.path.basename(os.path.normpath(download_path))}_dir")
-        print(f"Advertencia: El directorio de descarga tiene el mismo nombre que el archivo de entrada. Se cambió a: {download_path}")
+        print(f"Advertencia: El directorio de descarga tiene el mismo nombre que el ID. Se cambió a: {download_path}")
         if debug_mode:
             logging.debug(f"Directorio renombrado a: {download_path}")
     
@@ -469,51 +494,57 @@ def main():
             logging.debug(f"Directorio de descarga creado o verificado: {download_path}")
     except OSError as e:
         error_message = f"No se pudo crear el directorio {download_path}: {str(e)}"
-        logging.error(error_message)
         print(f"Error: {error_message}")
         return
     
     if not os.access(download_path, os.W_OK):
         error_message = f"No se tienen permisos de escritura en el directorio {download_path}"
-        logging.error(error_message)
         print(error_message)
         return
     
-    log_file = setup_logging(input_file, download_path, debug_mode)
+    log_file = setup_logging(input_file_base_name, download_path, debug_mode)
     if debug_mode:
         print(f"Registro de errores se guardará en: {log_file}")
     
-    output_csv1 = f"{input_file}_converted.csv"
-    unique_urls, output_csv1, converted_urls_count = extract_urls_from_tts_binary(input_file, output_csv1, download_path, debug_mode)
+    output_csv1 = f"{input_file_base_name}_converted.csv"
+    # Ahora usamos el archivo binario descargado (workshop_binary_path) como entrada
+    unique_urls, output_csv1_path, converted_urls_count = extract_urls_from_tts_binary(workshop_binary_path, output_csv1, download_path, debug_mode)
     
     if not unique_urls:
         error_message = "Error en la extracción de URLs. Proceso terminado."
         logging.error(error_message)
         print(error_message)
+        # Limpieza del archivo binario descargado
+        if os.path.exists(workshop_binary_path) and not debug_mode:
+            os.remove(workshop_binary_path)
         return
     
     print(f"Se extrajeron {converted_urls_count} URLs únicas.")
     
-    output_csv2 = f"{input_file}_replaced.csv"
-    output_csv2, replacements_made = replace_urls_in_csv(output_csv1, output_csv2, download_path, debug_mode)
+    output_csv2 = f"{input_file_base_name}_replaced.csv"
+    output_csv2_path, replacements_made = replace_urls_in_csv(output_csv1_path, output_csv2, download_path, debug_mode)
     
-    if not output_csv2:
+    if not output_csv2_path:
         error_message = "Error en el reemplazo de URLs. Proceso terminado."
         logging.error(error_message)
         print(error_message)
+        if os.path.exists(workshop_binary_path) and not debug_mode:
+            os.remove(workshop_binary_path)
         return
     
     print(f"Se realizaron {replacements_made} reemplazos de URLs.")
     
     try:
-        with open(output_csv2, 'r', encoding='utf-8-sig') as input_file:
+        with open(output_csv2_path, 'r', encoding='utf-8-sig') as input_file:
             reader_csv = csv.reader(input_file)
             urls = list(reader_csv)
         
         if not urls:
-            error_message = "El archivo CSV está vacío."
+            error_message = "El archivo CSV con URLs para descargar está vacío."
             logging.error(error_message)
             print(error_message)
+            if os.path.exists(workshop_binary_path) and not debug_mode:
+                os.remove(workshop_binary_path)
             return
         
         successful_downloads = 0
@@ -537,39 +568,37 @@ def main():
             
             if success:
                 successful_downloads += 1
-                print(f"Descargado ({successful_downloads}): {result}")
+                print(f"Descargado ({successful_downloads}/{len(urls)}): {result}")
             elif skipped:
                 skipped_files += 1
             else:
                 failed_downloads += 1
         
         print("\n=== Resumen Final ===")
+        print(f"Workshop ID procesado: {workshop_id} ('{workshop_title}')")
         print(f"URLs extraídas: {converted_urls_count}")
         print(f"Reemplazos realizados: {replacements_made}")
         print(f"URLs procesadas para descarga: {len(urls)}")
-        print(f"URLs descargadas exitosamente: {successful_downloads}")
-        print(f"URLs que fallaron: {failed_downloads}")
-        print(f"URLs omitidas: {skipped_files}")
+        print(f"Assets descargados exitosamente: {successful_downloads}")
+        print(f"Assets que fallaron: {failed_downloads}")
+        print(f"Assets omitidos: {skipped_files}")
         if debug_mode:
             print(f"Errores registrados en: {log_file}")
             logging.debug(f"Resumen: {converted_urls_count} URLs extraídas, {replacements_made} reemplazos, {successful_downloads} descargas exitosas, {failed_downloads} fallidas, {skipped_files} omitidas")
             
-    except FileNotFoundError as e:
-        error_message = f"No se pudo encontrar el archivo {e.filename}"
-        logging.error(error_message)
-        print(f"Error: {error_message}")
-    except PermissionError as e:
-        error_message = f"No se tienen permisos para leer/escribir los archivos: {str(e)}"
-        logging.error(error_message)
-        print(f"Error: {error_message}")
-    except csv.Error as e:
-        error_message = f"Error al procesar el archivo CSV: {str(e)}"
-        logging.error(error_message)
-        print(f"Error: {error_message}")
     except Exception as e:
-        error_message = f"Error inesperado: {str(e)}"
+        error_message = f"Error inesperado en la fase de descarga de assets: {str(e)}"
         logging.error(error_message)
         print(f"Error: {error_message}")
+    finally:
+        # Limpiar el archivo binario descargado si no estamos en modo debug
+        if os.path.exists(workshop_binary_path) and not debug_mode:
+            try:
+                os.remove(workshop_binary_path)
+                print(f"Archivo temporal '{workshop_binary_path}' eliminado.")
+            except OSError as e:
+                print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
+
 
 if __name__ == "__main__":
     main()
