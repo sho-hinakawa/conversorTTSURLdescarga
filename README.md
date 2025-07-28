@@ -1,4 +1,4 @@
-# Conversor de archivos TTS WorkshopUpload en assets descargados desde el mismo archivo 
+# Descargador de archivos de TTS desde el ID del Workshop 
 
 Este script en Python permite descargan los archivos de un mod del Workshop de Tabletop Simulator dado el ID a un directorio dado por el nombre del mod
 
