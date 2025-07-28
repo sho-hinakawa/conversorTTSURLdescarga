@@ -37,6 +37,14 @@ def clean_url(url):
         logging.error(f"Error al limpiar URL {url}: {str(e)}")
         return None
 
+# Sanitiza un nombre para que sea seguro como nombre de archivo o directorio
+def sanitize_filename(filename):
+    # Reemplaza espacios y caracteres no válidos para nombres de archivo
+    invalid_chars = r'[<>:"/\\|?*\x00-\x1F]'
+    sanitized = re.sub(invalid_chars, '', filename.replace(' ', ''))
+    # Si el nombre está vacío tras la limpieza, usa un nombre por defecto
+    return sanitized if sanitized else "WorkshopItem"
+
 # Extrae URLs de un archivo binario de Tabletop Simulator
 def extract_urls_from_tts_binary(input_file, download_path, debug_mode=False):
     if debug_mode:
@@ -372,8 +380,8 @@ def main():
         data = response.json()
         
         workshop_title = data.get("title", "WorkshopItem")
-        # Crear variable sin espacios para el directorio y el nombre del archivo
-        workshop_title_no_spaces = ''.join(workshop_title.split())
+        # Crear variable sin espacios ni caracteres inválidos para el directorio y el nombre del archivo
+        workshop_title_no_spaces = sanitize_filename(workshop_title)
         workshop_binary_path = f"{workshop_title_no_spaces}.bin"
         
         download_url = data.get("download_url")
@@ -403,7 +411,7 @@ def main():
     
     download_path_input = input(f"Ingrese el directorio donde se guardarán los archivos descargados (presione Enter para usar '{workshop_title_no_spaces}'): ").strip()
     
-    # Usar el título del workshop sin espacios como directorio predeterminado si no se especifica otro
+    # Usar el título del workshop sin espacios ni caracteres inválidos como directorio predeterminado si no se especifica otro
     download_path = download_path_input if download_path_input else workshop_title_no_spaces
     
     # Verificar que el directorio de descarga no tenga extensión .bin
