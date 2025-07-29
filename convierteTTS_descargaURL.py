@@ -14,6 +14,7 @@ import json
 import mimetypes
 import requests
 import logging
+import time
 from urllib.parse import urlparse
 from datetime import datetime
 
@@ -195,18 +196,42 @@ def replace_urls_in_csv(input_file, output_filename, download_path, debug_mode=F
 
 # Verifica la accesibilidad de una URL y obtiene su contenido
 def verify_and_fetch_url(url):
-    try:
-        response = requests.get(url, stream=True, allow_redirects=True, timeout=10)
-        if response.status_code == 200:
-            return response
-        else:
-            error_message = f"Código HTTP {response.status_code}"
-            logging.error(f"Error al verificar URL {url}: {error_message}")
-            raise requests.exceptions.RequestException(error_message)
-    except requests.exceptions.RequestException as e:
-        error_message = f"Error al verificar URL {url}: {str(e)}"
-        logging.error(error_message)
-        raise e
+    retries = 3
+    delay = 5  # segundos
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    for i in range(retries):
+        try:
+            response = requests.get(url, stream=True, allow_redirects=True, timeout=10, headers=headers)
+            if response.status_code == 200:
+                return response
+            elif response.status_code == 429:
+                # Si es el último intento, lanza la excepción directamente
+                if i == retries - 1:
+                    raise requests.exceptions.RequestException(f"Código HTTP {response.status_code}")
+                
+                logging.warning(f"Código HTTP 429 (Too Many Requests) para URL {url}. Reintentando en {delay} segundos...")
+                print(f"Aviso: Demasiadas peticiones al servidor. Esperando {delay} segundos antes de reintentar...")
+                time.sleep(delay)
+                delay *= 2  # Aumenta el tiempo de espera para el siguiente reintento
+                continue
+            else:
+                error_message = f"Código HTTP {response.status_code}"
+                logging.error(f"Error al verificar URL {url}: {error_message}")
+                raise requests.exceptions.RequestException(error_message)
+        except requests.exceptions.RequestException as e:
+            # Si es el último intento, relanza la excepción
+            if i == retries - 1:
+                error_message = f"Error final al verificar URL {url} tras {retries} intentos: {str(e)}"
+                logging.error(error_message)
+                raise e
+            logging.warning(f"Error en intento {i+1}/{retries} para URL {url}: {str(e)}. Reintentando en {delay} segundos...")
+            time.sleep(delay)
+
+    # Si el bucle termina sin éxito (aunque no debería llegar aquí con la lógica actual)
+    raise requests.exceptions.RequestException(f"No se pudo obtener la URL {url} después de {retries} intentos.") 
+
 
 # Determina la extensión de un archivo basado en el tipo MIME de los encabezados
 def get_file_extension(file_path, headers):
@@ -475,7 +500,12 @@ def main():
         return
     # --- FIN: LÓGICA NUEVA ---
 
-    download_path = input("Ingrese el directorio donde se guardarán los assets descargados: ").strip()
+    # Crear un nombre de directorio válido a partir del título del workshop
+    # Reemplaza caracteres inválidos para nombres de carpeta
+    safe_folder_name = re.sub(r'[<>:"/\\|?*]', '_', data.get("title", "WorkshopItem_Assets"))
+    download_path = os.path.join(os.getcwd(), safe_folder_name)
+
+    print(f"Los assets se guardarán en: {download_path}")
     
     # Usar el ID del workshop como nombre base para los archivos de salida
     input_file_base_name = workshop_id
@@ -573,6 +603,8 @@ def main():
                 skipped_files += 1
             else:
                 failed_downloads += 1
+            
+            time.sleep(1) # Pausa de 1 segundo para no saturar el servidor
         
         print("\n=== Resumen Final ===")
         print(f"Workshop ID procesado: {workshop_id} ('{workshop_title}')")
@@ -591,8 +623,8 @@ def main():
         logging.error(error_message)
         print(f"Error: {error_message}")
     finally:
-        # Limpiar el archivo binario descargado si no estamos en modo debug
-        if os.path.exists(workshop_binary_path) and not debug_mode:
+        # Limpiar el archivo binario descargado
+        if os.path.exists(workshop_binary_path):
             try:
                 os.remove(workshop_binary_path)
                 print(f"Archivo temporal '{workshop_binary_path}' eliminado.")
