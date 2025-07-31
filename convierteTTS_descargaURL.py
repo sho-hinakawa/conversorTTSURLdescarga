@@ -6,7 +6,7 @@
 # en un directorio automáticamente con el nombre del mod o designado por el usuario si ya existe.
 # Maneja errores como URLs inválidas, permisos de escritura, fallos de red, etc.
 # Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
-# Posee modo debug para almacenar archivos intermedios (como el CSV) y log de errores detallados.
+# Posee modo debug para almacenar archivos intermedios (CSV y log) y log de errores detallados.
 # Verifica si la biblioteca 'requests' está instalada, mostrando un mensaje de instalación si falta.
 
 # Creditos: Telegram @hinakawa y @alemarfar
@@ -35,15 +35,24 @@ from datetime import datetime
 
 # Configuración del logging
 def setup_logging(input_file, download_dir, debug_mode=False):
-    log_file = os.path.join(download_dir, f"{input_file}_log.txt")
-    logging.basicConfig(
-        filename=log_file,
-        level=logging.DEBUG if debug_mode else logging.ERROR,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%d-%m-%Y %H:%M:%S'
-    )
+    log_file = None
     if debug_mode:
+        log_file = os.path.join(download_dir, f"{input_file}_log.txt")
+        logging.basicConfig(
+            filename=log_file,
+            level=logging.DEBUG,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%d-%m-%Y %H:%M:%S'
+        )
         logging.debug(f"Modo debug activado. Log guardado en: {log_file}")
+    else:
+        # Configurar logging para mostrar errores en consola
+        logging.basicConfig(
+            level=logging.ERROR,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%d-%m-%Y %H:%M:%S',
+            handlers=[logging.StreamHandler()]
+        )
     return log_file
 
 # Limpia una URL eliminando espacios en blanco
@@ -633,8 +642,9 @@ def main():
         print(f"Archivos omitidos: {skipped_files}")
         if debug_mode and output_csv_path:
             print(f"URLs reemplazadas guardadas en: {output_csv_path}")
-        if debug_mode:
+        if debug_mode and log_file:
             print(f"Registro de errores se guardará en: {log_file}")
+        if debug_mode:
             if os.path.exists(workshop_binary_path):
                 print(f"Archivo binario guardado en: {workshop_binary_path}")
             
