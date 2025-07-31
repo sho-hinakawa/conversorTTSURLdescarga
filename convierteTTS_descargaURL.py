@@ -1,4 +1,5 @@
 # Script para descargar un mod de Tabletop Simulator usando su ID de la Workshop.
+<<<<<<< HEAD
 # Descarga el archivo principal (WorkshopUpload) usando una API externa.
 # Extrae todas las URLs de los archivos (imágenes, modelos 3D, pdf) de ese archivo,
 # utilizando los patrones especificados correspondientes a los campos de datos.
@@ -8,6 +9,16 @@
 # Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
 # Simula un navegador para servicio de alojamiento de imagenes y reintenta cuando la descarga falla.
 # Posee modo debug para almacenar archivos intermedios (CSV, WorkshopUpload) y log de errores detallados.
+=======
+# Primero, descarga el archivo principal (.bin) usando una API externa.
+# Luego, extrae todas las URLs de los archivos (imágenes, modelos 3D, pdf) de ese archivo,
+# utilizando los patrones especificados correspondientes a los campos de datos.
+# Reemplaza las URLs antiguas por unas válidas y descarga todos los archivos
+# en un directorio automáticamente con el nombre del mod o designado por el usuario si ya existe.
+# Maneja errores como URLs inválidas, permisos de escritura, fallos de red, etc.
+# Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
+# Posee modo debug para almacenar archivos intermedios (CSV y log) y log de errores detallados.
+>>>>>>> cbd10a750c48e2f51d8fd5acf072874b48d1358a
 # Verifica si la biblioteca 'requests' está instalada, mostrando un mensaje de instalación si falta.
 
 # Creditos: Telegram @hinakawa y @alemarfar
