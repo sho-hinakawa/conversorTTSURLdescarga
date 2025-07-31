@@ -1,17 +1,17 @@
 # Script para descargar un mod de Tabletop Simulator usando su ID de la Workshop.
 # Primero, descarga el archivo principal (.bin) usando una API externa.
-# Luego, extrae todas las URLs de los archivos (imágenes, modelos 3D, pdf) de ese archivo.
-# utilizando los patrones especificados correspondientes a los campos de datos
+# Luego, extrae todas las URLs de los archivos (imágenes, modelos 3D, pdf) de ese archivo,
+# utilizando los patrones especificados correspondientes a los campos de datos.
 # Reemplaza las URLs antiguas por unas válidas y descarga todos los archivos
-# en un directorio automaticamente con el nombre del mod o designado por el usuario si ya existe
+# en un directorio automáticamente con el nombre del mod o designado por el usuario si ya existe.
 # Maneja errores como URLs inválidas, permisos de escritura, fallos de red, etc.
 # Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
-# Posee modo debug para almecenar archivos intermedios y log de errores detallados
+# Posee modo debug para almacenar archivos intermedios (como el CSV) y log de errores detallados.
 # Verifica si la biblioteca 'requests' está instalada, mostrando un mensaje de instalación si falta.
 
 # Creditos: Telegram @hinakawa y @alemarfar
 
-# Todas las funciones y los pasos estan comentados para mayor entendimiento
+# Todas las funciones y los pasos están comentados para mayor entendimiento
 
 # Verificación de la biblioteca requests
 try:
@@ -143,22 +143,20 @@ def extract_urls_from_tts_binary(input_file, download_dir, debug_mode=False):
         print(f"Error: {error_message}")
         return None, 0
 
-# Reemplaza URLs específicas y guarda el resultado en un nuevo CSV
+# Reemplaza URLs específicas y guarda el resultado en un CSV solo si debug_mode=True
 def replace_urls_in_csv(urls, output_filename, download_dir, debug_mode=False):
-    output_csv_file = os.path.join(download_dir, output_filename)
-    
     if not os.access(download_dir, os.W_OK):
         error_message = f"No se tienen permisos de escritura en el directorio {download_dir}"
         logging.error(error_message)
         print(error_message)
-        return None, 0
+        return None, 0, []
     
     try:
         if not urls:
             error_message = "No hay URLs para procesar."
             logging.error(error_message)
             print(error_message)
-            return None, 0
+            return None, 0, []
         
         if debug_mode:
             logging.debug(f"Procesando {len(urls)} URLs para reemplazo")
@@ -176,24 +174,28 @@ def replace_urls_in_csv(urls, output_filename, download_dir, debug_mode=False):
                 seen_urls.add(modified_url)
                 replaced_rows.append([pattern, modified_url])
         
-        with open(output_csv_file, 'w', encoding='utf-8-sig', newline='') as output_file:
-            csv_writer = csv.writer(output_file)
-            if replaced_rows:
-                csv_writer.writerows(replaced_rows)
-            else:
-                csv_writer.writerow(["Mensaje", "No se encontraron URLs válidas o todas eran duplicadas"])
+        # Solo guardar el CSV si debug_mode es True
+        output_csv_file = None
+        if debug_mode:
+            output_csv_file = os.path.join(download_dir, output_filename)
+            with open(output_csv_file, 'w', encoding='utf-8-sig', newline='') as output_file:
+                csv_writer = csv.writer(output_file)
+                if replaced_rows:
+                    csv_writer.writerows(replaced_rows)
+                else:
+                    csv_writer.writerow(["Mensaje", "No se encontraron URLs válidas o todas eran duplicadas"])
         
         print("\nResumen de procesamiento:")
         print(f"Filas procesadas: {len(urls)}")
         print(f"Reemplazos realizados: {len(replaced_rows)}")
         
-        return output_csv_file, len(replaced_rows)
+        return output_csv_file, len(replaced_rows), replaced_rows
 
     except Exception as e:
         error_message = f"Error inesperado: {str(e)}"
         logging.error(error_message)
         print(f"Error: {error_message}")
-        return None, 0
+        return None, 0, []
 
 # Verifica la accesibilidad de una URL y obtiene su contenido
 def verify_and_fetch_url(url):
@@ -565,9 +567,9 @@ def main():
     print(f"Se extrajeron {converted_urls_count} URLs únicas.")
     
     output_csv = f"{input_file_base_name}_replaced.csv"
-    output_csv_path, replacements_made = replace_urls_in_csv(unique_urls, output_csv, download_dir, debug_mode)
+    output_csv_path, replacements_made, replaced_rows = replace_urls_in_csv(unique_urls, output_csv, download_dir, debug_mode)
     
-    if not output_csv_path:
+    if not replaced_rows:
         error_message = "Error en el reemplazo de URLs. Proceso terminado."
         logging.error(error_message)
         print(error_message)
@@ -579,12 +581,11 @@ def main():
         return
     
     try:
-        with open(output_csv_path, 'r', encoding='utf-8-sig') as input_file:
-            csv_reader = csv.reader(input_file)
-            urls = list(csv_reader)
+        # Usar replaced_rows directamente en lugar de leer el CSV
+        urls = replaced_rows
         
         if not urls:
-            error_message = "El archivo CSV con URLs para descargar está vacío."
+            error_message = "No hay URLs válidas para descargar."
             logging.error(error_message)
             print(error_message)
             if os.path.exists(workshop_binary_path) and not debug_mode:
@@ -600,7 +601,7 @@ def main():
         
         for index, row in enumerate(urls, start=1):
             if len(row) < 2:
-                error_message = f"Fila inválida en el CSV (menos de 2 columnas): {row}"
+                error_message = f"Fila inválida en URLs procesadas (menos de 2 columnas): {row}"
                 logging.error(error_message)
                 print(error_message)
                 continue
@@ -630,7 +631,8 @@ def main():
         print(f"Archivos descargados exitosamente: {successful_downloads}")
         print(f"Archivos que fallaron: {failed_downloads}")
         print(f"Archivos omitidos: {skipped_files}")
-        print(f"URLs reemplazadas guardadas en: {output_csv_path}")
+        if debug_mode and output_csv_path:
+            print(f"URLs reemplazadas guardadas en: {output_csv_path}")
         if debug_mode:
             print(f"Registro de errores se guardará en: {log_file}")
             if os.path.exists(workshop_binary_path):
