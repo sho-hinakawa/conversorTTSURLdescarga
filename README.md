@@ -11,10 +11,12 @@ Este script en Python permite descargan los archivos de un mod del Workshop de T
 - Verifica que sean URLs unicas
 - Detecta extensiones de los archivos segun su cabecera descargada y le asiga el MIME Type correspondiente
   a los correspondientes a TTS
-- Descarga las URLs indicando nombre del campo de datos utilizando el metodo HTTP GET a un directorio especificado por el usuario
+- Descarga las URLs indicando nombre del campo de datos utilizando el metodo HTTP GET a un directorio con el nombre del mod o a uno especificado por el usuario si ya existe
 - Identifica la extension del archivo identificando la cabecera leyendo los primeros 4096 bytes del archivo y comparandolos con archivos conocidos de TTS
-- Descarga a un directorio con el mismo nombre que el mod de TTS o uno que elija el usuario
-- Posee metodo debug para entregar mensajes en pantalla, guardar errores 
+- Simula un navegador para los sitios de hosting de imagenes y reintenta la descarga de archivos si esta falla
+- Guarda automaticamente las URLs reemplazadas en un archivo TXT 
+- Verifica que la libreria request este instalada al ejecutar el script
+
 
 ## Requisitos
 - **Python**: Versión 3.6 o superior.

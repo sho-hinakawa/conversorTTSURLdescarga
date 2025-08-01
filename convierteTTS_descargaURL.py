@@ -7,7 +7,7 @@
 # Maneja errores como URLs inválidas, permisos de escritura.
 # Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
 # Simula un navegador para servicio de alojamiento de imagenes y reintenta cuando la descarga falla.
-# Posee modo debug para almacenar archivos intermedios (CSV, WorkshopUpload) y log de errores detallados.
+# Guarda automaticamente las URLs reemplazadas en un archivo TXT en caso de requerirlo a posterior.
 # Verifica si la biblioteca 'requests' está instalada, mostrando un mensaje de instalación si falta.
 
 # Creditos: Telegram @hinakawa y @alemarfar
