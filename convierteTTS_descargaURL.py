@@ -1,12 +1,16 @@
-# Script para descargar un mod de Tabletop Simulator usando su ID de la Workshop.
-# Descarga el archivo principal ({workshop_id}) usando una API externa, extrae URLs de archivos
-# (imágenes, modelos 3D, etc.), reemplaza URLs antiguas por válidas, y descarga los archivos
-# en un directorio designado. Solo guarda las URLs reemplazadas en un archivo TXT.
-# Muestra en el resumen final el mensaje de generación del archivo TXT.
-#
-# Creditos: Telegram @hinakawa
-# Modificado para no usar modo debug, no guardar log de errores, solo generar archivo TXT,
-# y usar {workshop_id} como nombre del archivo temporal sin extensión .bin.
+# Script para descargar un mod de Tabletop Simulator usando su URL de la Workshop.
+# Extrae el ID de la URL, descarga el archivo principal usando una API externa, extrae URLs de archivos
+# (imágenes, modelos 3D, pdf.) de ese archivo, utilizando los patrones especificados correspondientes 
+# a los campos de datos.
+# Reemplaza las URLs antiguas por unas válidas y descarga todos los archivos
+# en un directorio automáticamente con el nombre del mod o designado por el usuario si ya existe.
+# Maneja errores como URLs inválidas, permisos de escritura.
+# Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
+# Simula un navegador para servicio de alojamiento de imagenes y reintenta cuando la descarga falla.
+# Guarda automaticamente las URLs reemplazadas en un archivo TXT en caso de requerirlo a posterior.
+# Verifica si la biblioteca 'requests' está instalada, mostrando un mensaje de instalación si falta.
+
+# Creditos: Telegram @hinakawa y @alemarfar
 
 try:
     import requests
@@ -22,6 +26,12 @@ import mimetypes
 import time
 from urllib.parse import urlparse
 from datetime import datetime
+
+# Función para extraer el ID de una URL de Steam Community
+def extract_steam_id(url):
+    pattern = r'id=(\d+)'
+    match = re.search(pattern, url)
+    return match.group(1) if match else None
 
 # Limpia una URL eliminando espacios en blanco
 def clean_url(url):
@@ -306,10 +316,11 @@ def main():
     # Modo debug desactivado por defecto
     debug_mode = False
 
-    # --- INICIO: LÓGICA PARA DESCARGAR DESDE WORKSHOP ID ---
-    workshop_id = input("Ingrese el ID del Workshop de Steam: ").strip()
-    if not workshop_id.isdigit():
-        print("Error: El ID del workshop debe ser un número.")
+    # --- INICIO: LÓGICA PARA DESCARGAR DESDE URL ---
+    workshop_url = input("Ingrese la URL del Workshop de Steam: ").strip()
+    workshop_id = extract_steam_id(workshop_url)
+    if not workshop_id:
+        print("Error: No se pudo extraer un ID válido de la URL proporcionada.")
         return
 
     # Construir URL de la API y obtener información
@@ -390,7 +401,7 @@ def main():
     except json.JSONDecodeError:
         print("Error: La respuesta de la API no es un JSON válido.")
         return
-    # --- FIN: LÓGICA PARA DESCARGAR DESDE WORKSHOP ID ---
+    # --- FIN: LÓGICA PARA DESCARGAR DESDE URL ---
 
     # Extraer URLs directamente del archivo binario
     try:
