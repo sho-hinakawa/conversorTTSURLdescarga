@@ -1,2 +1,2 @@
-python convierteTTS_descargaURL.py
+py convierteTTS_descargaURL.py
 pause
