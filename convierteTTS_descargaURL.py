@@ -338,7 +338,7 @@ def main():
     # Modo debug desactivado por defecto
     debug_mode = False
 
-    # --- INICIO: LÓGICA PARA DESCARGAR DESDE URL ---
+    #Descarga desde la URL del Workshop de Steam
     workshop_url = input("Ingrese la URL del Workshop de Steam: ").strip()
     workshop_id = extract_steam_id(workshop_url)
     if not workshop_id:
@@ -350,7 +350,7 @@ def main():
     
     try:
         print(f"Obteniendo información para el ID: {workshop_id}...")
-        response = requests.get(api_url, timeout=30)  # Aumentado de 15 a 30 segundos
+        response = requests.get(api_url, timeout=30) 
         response.raise_for_status()
         data = response.json()
         
@@ -423,7 +423,7 @@ def main():
     except json.JSONDecodeError:
         print("Error: La respuesta de la API no es un JSON válido.")
         return
-    # --- FIN: LÓGICA PARA DESCARGAR DESDE URL ---
+    
 
     # Extraer URLs directamente del archivo binario
     try:
@@ -639,4 +639,5 @@ def main():
                 print(f"No se pudo eliminar el archivo CSV temporal '{extracted_csv_path}': {e}")
 
 if __name__ == "__main__":
+
     main()
