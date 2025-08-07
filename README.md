@@ -1,13 +1,12 @@
-# Descargador de archivos de TTS desde el ID del Workshop 
+# Descargador de archivos de TTS desde la URL del Workshop 
 
-Este script en Python permite descargan los archivos de un mod del Workshop de Tabletop Simulator dado el ID a un directorio dado por el nombre del mod
+Este script en Python permite descargan los archivos de un mod del Workshop de Tabletop Simulator dada la URL del Workshop un directorio dado por el nombre del mod
 
 **Creditos** Telegram @hinakawa y @alemarfar
 
 ## Caracteristicas
 - Lee el ID desde el Workshop de TTS especificado por el usuario
 - Realiza la conversion a archivo obteniendo los campo de datos terminados en URL y su url
-- Reconoce cara frontal con cara trasera
 - Realiza reemplazo de las url con las URLs validas para descargar
 - Verifica que sean URLs unicas
 - Detecta extensiones de los archivos segun su cabecera descargada y le asiga el MIME Type correspondiente
@@ -26,4 +25,5 @@ Este script en Python permite descargan los archivos de un mod del Workshop de T
  pip install requests
 ```
    
+
 

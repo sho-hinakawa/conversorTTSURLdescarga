@@ -2,16 +2,15 @@
 # Extrae el ID de la URL, descarga el archivo principal usando una API externa, extrae URLs de archivos
 # (imágenes, modelos 3D, pdf.) de ese archivo, utilizando los patrones especificados correspondientes 
 # a los campos de datos.
-# Reconoce cara frontal con cara trasera y mantiene el numero para mejor identificacion  
 # Reemplaza las URLs antiguas por unas válidas y descarga todos los archivos
 # en un directorio automáticamente con el nombre del mod o designado por el usuario si ya existe.
 # Maneja errores como URLs inválidas, permisos de escritura.
 # Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
-# Simula un navegador para servicio de alojamiento de imágenes y reintenta cuando la descarga falla.
-# Guarda las URLs reemplazadas en un TXT 
+# Simula un navegador para servicio de alojamiento de imagenes y reintenta cuando la descarga falla.
+# Guarda automaticamente las URLs reemplazadas en un archivo TXT en caso de requerirlo a posterior.
 # Verifica si la biblioteca 'requests' está instalada, mostrando un mensaje de instalación si falta.
 
-# Créditos: Telegram @hinakawa y @alemarfar
+# Creditos: Telegram @hinakawa y @alemarfar
 
 try:
     import requests
@@ -42,8 +41,8 @@ def clean_url(url):
         print(f"Error al limpiar URL {url}: {str(e)}")
         return None
 
-# Reemplaza URLs específicas y guarda el resultado en un CSV permanente sin cabecera, con FaceURL y BackURL con el mismo contador
-def replace_urls_in_csv(urls, face_urls, back_urls, output_filename, download_path):
+# Reemplaza URLs específicas en una lista de URLs y guarda el resultado en un CSV temporal
+def replace_urls_in_csv(urls, output_filename, download_path):
     archivo_salida_csv = os.path.join(download_path, output_filename)
     
     if not os.access(download_path, os.W_OK):
@@ -60,44 +59,26 @@ def replace_urls_in_csv(urls, face_urls, back_urls, output_filename, download_pa
         urls_vistas = set()
         filas_reemplazadas = []
         
-        # Procesar FaceURL y BackURL primero, con el mismo contador por par
-        max_pairs = max(len(face_urls), len(back_urls))
-        for i in range(max_pairs):
-            counter = i + 1  # Contador comienza en 1
-            if i < len(face_urls):
-                url = face_urls[i]
-                url_modificada = url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net') if 'cloud-3.steamusercontent.com' in url.lower() else url
-                if url_modificada not in urls_vistas:
-                    urls_vistas.add(url_modificada)
-                    filas_reemplazadas.append([f'FaceURL_{counter}', url_modificada])
-            if i < len(back_urls):
-                url = back_urls[i]
-                url_modificada = url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net') if 'cloud-3.steamusercontent.com' in url.lower() else url
-                if url_modificada not in urls_vistas:
-                    urls_vistas.add(url_modificada)
-                    filas_reemplazadas.append([f'BackURL_{counter}', url_modificada])
-        
-        # Añadir el resto de las URLs con contadores subsecuentes
-        next_counter = max_pairs + 1
-        for patron, url in urls:
-            if patron not in ['FaceURL', 'BackURL']:  # Evitar duplicar FaceURL y BackURL
-                url_modificada = url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net') if 'cloud-3.steamusercontent.com' in url.lower() else url
-                if url_modificada not in urls_vistas:
-                    urls_vistas.add(url_modificada)
-                    filas_reemplazadas.append([f'{patron}_{next_counter}', url_modificada])
-                    next_counter += 1
+        for i, (patron, url) in enumerate(urls, start=1):
+            if 'cloud-3.steamusercontent.com' in url.lower():
+                url_modificada = url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net')
+            else:
+                url_modificada = url
+            
+            if url_modificada not in urls_vistas:
+                urls_vistas.add(url_modificada)
+                filas_reemplazadas.append([patron, url_modificada])
         
         with open(archivo_salida_csv, 'w', encoding='utf-8-sig', newline='') as archivo_salida:
             escritor_csv = csv.writer(archivo_salida)
-            # No escribir la cabecera ['patron', 'url']
             if filas_reemplazadas:
                 escritor_csv.writerows(filas_reemplazadas)
             else:
                 escritor_csv.writerow(["Mensaje", "No se encontraron URLs válidas o todas eran duplicadas"])
         
         print("\nResumen de procesamiento:")
-        print(f"URLs procesadas: {len(urls) + len(face_urls) + len(back_urls)}")
-        print(f"URLs únicas reemplazadas: {len(filas_reemplazadas)}")
+        print(f"Filas procesadas: {len(urls)}")
+        print(f"Reemplazos realizados: {len(filas_reemplazadas)}")
         
         return archivo_salida_csv, len(filas_reemplazadas)
 
@@ -222,40 +203,37 @@ def download_file(url, download_path, index, pattern):
         
         detected_mime_type, signature_extension = verify_header_signature(content, pattern)
         
-        if pattern.startswith('FaceURL') or pattern.startswith('BackURL'):
-            base_pattern = pattern.split('_')[0]  # Extraer FaceURL o BackURL sin contador
+        if pattern in ['FaceURL', 'BackURL']:
             if url_extension.lower() == '.bin':
                 if detected_mime_type not in ['image/jpeg', 'image/png']:
-                    error_message = f"Extensión .bin no permitida para {base_pattern}, firma no es imagen: {url}"
+                    error_message = f"Extensión .bin no permitida para {pattern}, firma no es imagen: {url}"
                     print(error_message)
                     return False, error_message, False
                 url_extension = signature_extension
             elif detected_mime_type not in ['image/jpeg', 'image/png']:
-                error_message = f"Firma no válida para {base_pattern}: {detected_mime_type or 'desconocido'}: {url}"
+                error_message = f"Firma no válida para {pattern}: {detected_mime_type or 'desconocido'}: {url}"
                 print(error_message)
                 return False, error_message, False
         
         if pattern:
-            if pattern.startswith('MeshURL'):
-                base_pattern = pattern.split('_')[0]
+            if pattern == 'MeshURL':
                 if detected_mime_type != 'model/obj' and content_type not in ['model/obj', 'text/plain', 'application/octet-stream']:
-                    error_message = f"Firma o tipo MIME no válido para {base_pattern}: {detected_mime_type or content_type}: {url}"
+                    error_message = f"Firma o tipo MIME no válido para MeshURL: {detected_mime_type or content_type}: {url}"
                     print(error_message)
                     return False, error_message, False
-                filename = f"{pattern}.obj"
-            elif pattern.startswith('PDFUrl'):
-                base_pattern = pattern.split('_')[0]
+                filename = f"{pattern}_{index}.obj"
+            elif pattern == 'PDFUrl':
                 if detected_mime_type != 'application/pdf' and content_type not in ['application/pdf']:
-                    error_message = f"Firma o tipo MIME no válido para {base_pattern}: {detected_mime_type or content_type}: {url}"
+                    error_message = f"Firma o tipo MIME no válido para PDFUrl: {detected_mime_type or content_type}: {url}"
                     print(error_message)
                     return False, error_message, False
-                filename = f"{pattern}.pdf"
-            elif pattern.startswith('FaceURL') or pattern.startswith('BackURL'):
-                filename = f"{pattern}{signature_extension}"
+                filename = f"{pattern}_{index}.pdf"
+            elif pattern in ['FaceURL', 'BackURL']:
+                filename = f"{pattern}_{index}{signature_extension}"
             else:
-                filename = f"{pattern}"
+                filename = f"{pattern}_{index}"
                 if detected_mime_type and signature_extension:
-                    filename = f"{pattern}{signature_extension}"
+                    filename = f"{pattern}_{index}{signature_extension}"
         else:
             if not filename or len(filename) > 100:
                 filename = f"file_{index}"
@@ -268,7 +246,7 @@ def download_file(url, download_path, index, pattern):
                 else:
                     filename = f"{name}_{index}{ext}"
         
-        if not (pattern.startswith('MeshURL') or pattern.startswith('PDFUrl') or pattern.startswith('FaceURL') or pattern.startswith('BackURL')):
+        if pattern not in ['MeshURL', 'PDFUrl', 'FaceURL', 'BackURL']:
             new_extension = get_file_extension(None, response.headers)
             if url_extension and url_extension.lower() != '.bin' and url_extension.lower() in [ext.lower() for ext in MIME_TO_EXTENSION.values()]:
                 filename = f"{name}_{index}{url_extension}"
@@ -296,7 +274,7 @@ def download_file(url, download_path, index, pattern):
                 if chunk:
                     f.write(chunk)
         
-        if not (pattern.startswith('MeshURL') or pattern.startswith('PDFUrl') or pattern.startswith('FaceURL') or pattern.startswith('BackURL')):
+        if pattern not in ['MeshURL', 'PDFUrl', 'FaceURL', 'BackURL']:
             name, url_extension = os.path.splitext(os.path.basename(parsed_url.path))
             if not url_extension or url_extension.lower() not in [ext.lower() for ext in MIME_TO_EXTENSION.values()]:
                 name, ext = os.path.splitext(filename)
@@ -350,7 +328,7 @@ def main():
     
     try:
         print(f"Obteniendo información para el ID: {workshop_id}...")
-        response = requests.get(api_url, timeout=30)  # Aumentado de 15 a 30 segundos
+        response = requests.get(api_url, timeout=15)
         response.raise_for_status()
         data = response.json()
         
@@ -456,8 +434,6 @@ def main():
 
         seen_urls = set()
         urls = []
-        face_urls = []
-        back_urls = []
         for pattern, url_type in url_patterns:
             matches = re.finditer(pattern, text, re.DOTALL)
             for match in matches:
@@ -469,28 +445,7 @@ def main():
                     not any(word in cleaned_url.lower() for word in ['function', 'end', 'if', 'then', 'else', 'lua'])):
                     if cleaned_url not in seen_urls:
                         seen_urls.add(cleaned_url)
-                        if url_type == 'FaceURL':
-                            face_urls.append(cleaned_url)
-                        elif url_type == 'BackURL':
-                            back_urls.append(cleaned_url)
                         urls.append((url_type, cleaned_url))
-        
-        # Crear un CSV temporal con pares FrontURL y BackURL
-        extracted_csv = f"{input_file_base_name}_extracted.csv"
-        extracted_csv_path = os.path.join(download_path, extracted_csv)
-        try:
-            with open(extracted_csv_path, 'w', encoding='utf-8-sig', newline='') as csv_file:
-                writer = csv.writer(csv_file)
-                writer.writerow(['FrontURL', 'BackURL'])
-                # Emparejar FaceURL y BackURL con el mismo índice
-                max_pairs = max(len(face_urls), len(back_urls))
-                for i in range(max_pairs):
-                    front_url = face_urls[i] if i < len(face_urls) else ''
-                    back_url = back_urls[i] if i < len(back_urls) else ''
-                    writer.writerow([front_url, back_url])
-            print(f"Archivo CSV temporal de URLs extraídas generado: {extracted_csv_path}")
-        except Exception as e:
-            print(f"Error al generar el archivo CSV temporal de URLs extraídas {extracted_csv_path}: {str(e)}")
         
         unique_urls = list(dict.fromkeys(urls))
         converted_urls_count = len(unique_urls)
@@ -503,11 +458,6 @@ def main():
                     os.remove(workshop_binary_path)
                 except OSError as e:
                     print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
-            if os.path.exists(extracted_csv_path):
-                try:
-                    os.remove(extracted_csv_path)
-                except OSError as e:
-                    print(f"No se pudo eliminar el archivo CSV temporal '{extracted_csv_path}': {e}")
             return
         
         print(f"Se extrajeron {converted_urls_count} URLs únicas.")
@@ -520,15 +470,10 @@ def main():
                 os.remove(workshop_binary_path)
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
-        if os.path.exists(extracted_csv_path):
-            try:
-                os.remove(extracted_csv_path)
-            except OSError as e:
-                print(f"No se pudo eliminar el archivo CSV temporal '{extracted_csv_path}': {e}")
         return
     
     output_csv2 = f"{input_file_base_name}_replaced.csv"
-    output_csv2_path, replacements_made = replace_urls_in_csv(unique_urls, face_urls, back_urls, output_csv2, download_path)
+    output_csv2_path, replacements_made = replace_urls_in_csv(unique_urls, output_csv2, download_path)
     
     if not output_csv2_path:
         error_message = "Error en el reemplazo de URLs. Proceso terminado."
@@ -538,11 +483,6 @@ def main():
                 os.remove(workshop_binary_path)
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
-        if os.path.exists(extracted_csv_path):
-            try:
-                os.remove(extracted_csv_path)
-            except OSError as e:
-                print(f"No se pudo eliminar el archivo CSV temporal '{extracted_csv_path}': {e}")
         return
     
     print(f"Se realizaron {replacements_made} reemplazos de URLs.")
@@ -561,11 +501,6 @@ def main():
                     os.remove(workshop_binary_path)
                 except OSError as e:
                     print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
-            if os.path.exists(extracted_csv_path):
-                try:
-                    os.remove(extracted_csv_path)
-                except OSError as e:
-                    print(f"No se pudo eliminar el archivo CSV temporal '{extracted_csv_path}': {e}")
             return
         
         # Crear archivo TXT con solo las URLs
@@ -614,11 +549,11 @@ def main():
         print(f"Workshop ID procesado: {workshop_id}")
         print(f"Nombre Mod TTS: {workshop_title}")
         print(f"URLs extraídas: {converted_urls_count}")
-        print(f"URLs únicas reemplazadas: {replacements_made}")
+        print(f"Reemplazos realizados: {replacements_made}")
         print(f"URLs procesadas para descarga: {len(urls)}")
         print(f"Archivos descargados exitosamente: {successful_downloads}")
         print(f"Archivos que fallaron: {failed_downloads}")
-        print(f"Archivos omitidos (no coiciden con extensiones conocidas): {skipped_files}")
+        print(f"Archivos omitidos: {skipped_files}")
         print(f"Archivo TXT de URLs reemplazadas generado: {output_txt_path}")
             
     except Exception as e:
@@ -631,12 +566,12 @@ def main():
                 os.remove(workshop_binary_path)
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
-        # Limpiar el archivo CSV de URLs extraídas
-        if os.path.exists(extracted_csv_path):
+        # Limpiar el archivo CSV reemplazado
+        if os.path.exists(output_csv2_path):
             try:
-                os.remove(extracted_csv_path)
+                os.remove(output_csv2_path)
             except OSError as e:
-                print(f"No se pudo eliminar el archivo CSV temporal '{extracted_csv_path}': {e}")
+                print(f"No se pudo eliminar el archivo CSV '{output_csv2_path}': {e}")
 
 if __name__ == "__main__":
     main()
