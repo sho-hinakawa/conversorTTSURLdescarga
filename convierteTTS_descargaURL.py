@@ -328,7 +328,7 @@ def main():
     
     try:
         print(f"Obteniendo información para el ID: {workshop_id}...")
-        response = requests.get(api_url, timeout=15)
+        response = requests.get(api_url, timeout=30)
         response.raise_for_status()
         data = response.json()
         
@@ -574,4 +574,5 @@ def main():
                 print(f"No se pudo eliminar el archivo CSV '{output_csv2_path}': {e}")
 
 if __name__ == "__main__":
+
     main()
