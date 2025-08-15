@@ -3,14 +3,16 @@
 # (imágenes, modelos 3D, pdf.) de ese archivo, utilizando los patrones especificados correspondientes 
 # a los campos de datos.
 # Reemplaza las URLs antiguas por unas válidas y descarga todos los archivos
-# en un directorio automáticamente con el nombre del mod o designado por el usuario si ya existe.
+# en un directorio automáticamente con el nombre del mod.
 # Maneja errores como URLs inválidas, permisos de escritura.
 # Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
-# Simula un navegador para servicio de alojamiento de imagenes y reintenta cuando la descarga falla.
-# Guarda automaticamente las URLs reemplazadas en un archivo TXT en caso de requerirlo a posterior.
+# Simula un navegador para servicio de alojamiento de imágenes y reintenta cuando la descarga falla.
+# Da la opción de si se posee el archivo JSON descargar el frente y la trasera de las cartas.
+# Guarda automáticamente las URLs utilizadas TXT en caso de requerirlo a posterior.
+# Muestra al final un resumen del proceso de descarga.
 # Verifica si la biblioteca 'requests' está instalada, mostrando un mensaje de instalación si falta.
 
-# Creditos: Telegram @hinakawa y @alemarfar
+# Créditos: Telegram @hinakawa y @alemarfar
 
 try:
     import requests
@@ -24,6 +26,7 @@ import csv
 import json
 import mimetypes
 import time
+import shutil
 from urllib.parse import urlparse
 from datetime import datetime
 
@@ -344,36 +347,17 @@ def main():
         download_path = os.path.join(os.getcwd(), safe_folder_name)
         workshop_binary_path = os.path.join(download_path, f"{workshop_id}")
 
-        # Verificar si el directorio o el archivo binario ya existen
-        while os.path.exists(download_path) or os.path.exists(workshop_binary_path):
-            if os.path.exists(download_path):
-                print(f"El directorio propuesto '{download_path}' ya existe.")
-            if os.path.exists(workshop_binary_path):
-                print(f"El archivo '{workshop_binary_path}' ya existe en el directorio de descarga.")
-            new_folder_name = input("Ingrese un nuevo nombre para el directorio de descarga: ").strip()
-            new_folder_name = re.sub(r'[<>:"/\\|?*\s]', '_', new_folder_name)
-            if not new_folder_name:
-                new_folder_name = f"WorkshopItem_Archivos_{workshop_id}"
-            download_path = os.path.join(os.getcwd(), new_folder_name)
-            workshop_binary_path = os.path.join(download_path, f"{workshop_id}")
-            print(f"El directorio propuesto es: {download_path}")
-        
-        # Evitar que el directorio de descarga se llame igual que el archivo de entrada
-        input_file_base_name = workshop_id
-        directory_name = os.path.basename(os.path.normpath(download_path)).lower()
-        if directory_name == input_file_base_name.lower():
-            new_download_path = os.path.join(os.path.dirname(download_path) or '.', f"{input_file_base_name}_dir")
-            counter = 1
-            while os.path.exists(new_download_path):
-                new_download_path = os.path.join(os.path.dirname(download_path) or '.', f"{input_file_base_name}_dir_{counter}")
-                counter += 1
-            download_path = new_download_path
-            workshop_binary_path = os.path.join(download_path, f"{workshop_id}")
-            print(f"Advertencia: El directorio de descarga tiene el mismo nombre que el ID. Se cambió a: {download_path}")
-        
-        print(f"Los archivos se guardarán en: {download_path}")
-        
-        # Crear el directorio de descarga antes de descargar el archivo
+        # Eliminar el directorio si ya existe
+        if os.path.exists(download_path):
+            try:
+                shutil.rmtree(download_path)
+                print(f"Directorio existente '{download_path}' eliminado.")
+            except OSError as e:
+                error_message = f"No se pudo eliminar el directorio existente '{download_path}': {str(e)}"
+                print(f"Error: {error_message}")
+                return
+
+        # Crear el directorio de descarga
         try:
             os.makedirs(download_path, exist_ok=True)
             os.chmod(download_path, 0o777)
@@ -388,6 +372,9 @@ def main():
             print(error_message)
             return
 
+        print(f"Los archivos se guardarán en: {download_path}")
+        
+        # Descargar el archivo principal
         print(f"Descargando archivo principal de '{workshop_title}'...")
         workshop_response = requests.get(download_url, timeout=60)
         workshop_response.raise_for_status()
@@ -438,6 +425,7 @@ def main():
                         print(f"Descargando imágenes de cartas encontradas en el JSON...")
                         successful = 0
                         failed = 0
+                        downloaded_urls = []  # Lista para almacenar URLs descargadas
                         for name, url in face_back_pairs:
                             print(f"Descargando {name} ...")
                             try:
@@ -452,10 +440,40 @@ def main():
                                     f.write(content)
                                 print(f"Guardado: {file_path}")
                                 successful += 1
+                                downloaded_urls.append(url)  # Agregar URL a la lista
                             except Exception as e:
                                 print(f"Error al descargar {name}: {e}")
                                 failed += 1
-                        print(f"\nDescarga terminada. Éxitos: {successful}, Fallos: {failed}")
+                        
+                        # Guardar las URLs descargadas en un archivo de texto
+                        output_txt_json = f"{workshop_id}_descargadas.txt"
+                        output_txt_json_path = os.path.join(download_path, output_txt_json)
+                        try:
+                            with open(output_txt_json_path, 'w', encoding='utf-8', newline='') as txt_file:
+                                if downloaded_urls:
+                                    txt_file.write('\n'.join(downloaded_urls))
+                                else:
+                                    txt_file.write("No se descargaron URLs válidas desde el JSON")
+                            print(f"Archivo de URLs descargadas generado: {output_txt_json_path}")
+                        except Exception as e:
+                            print(f"Error al generar el archivo TXT {output_txt_json_path}: {str(e)}")
+                        
+                        # Mostrar resumen final para descargas desde JSON
+                        print("\n=== Resumen Final (JSON) ===")
+                        print(f"Workshop ID procesado: {workshop_id}")
+                        print(f"Nombre Mod TTS: {workshop_title}")
+                        print(f"URLs procesadas para descarga: {len(face_back_pairs)}")
+                        print(f"Archivos descargados exitosamente: {successful}")
+                        print(f"Archivos que fallaron: {failed}")
+                        print(f"Archivo TXT de URLs descargadas generado: {output_txt_json_path}")
+                        
+                        # Eliminar el archivo binario después del procesamiento del JSON
+                        if os.path.exists(workshop_binary_path):
+                            try:
+                                os.remove(workshop_binary_path)
+                                print(f"Archivo binario '{workshop_binary_path}' eliminado tras procesamiento del JSON.")
+                            except OSError as e:
+                                print(f"No se pudo eliminar el archivo binario '{workshop_binary_path}': {e}")
                         return
                 except Exception as e:
                     print(f"Error al leer el JSON: {e}")
@@ -540,7 +558,7 @@ def main():
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
         return
     
-    output_csv2 = f"{input_file_base_name}_replaced.csv"
+    output_csv2 = f"{workshop_id}_replaced.csv"
     output_csv2_path, replacements_made = replace_urls_in_csv(unique_urls, output_csv2, download_path)
     
     if not output_csv2_path:
@@ -572,7 +590,7 @@ def main():
             return
         
         # Crear archivo TXT con solo las URLs
-        output_txt = f"{input_file_base_name}_replaced.txt"
+        output_txt = f"{workshop_id}_replaced.txt"
         output_txt_path = os.path.join(download_path, output_txt)
         try:
             with open(output_csv2_path, 'r', encoding='utf-8-sig') as csv_file:
@@ -632,15 +650,16 @@ def main():
         if os.path.exists(workshop_binary_path):
             try:
                 os.remove(workshop_binary_path)
+                print(f"Archivo binario '{workshop_binary_path}' eliminado.")
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
         # Limpiar el archivo CSV reemplazado
         if os.path.exists(output_csv2_path):
             try:
                 os.remove(output_csv2_path)
+                print(f"Archivo CSV '{output_csv2_path}' eliminado.")
             except OSError as e:
                 print(f"No se pudo eliminar el archivo CSV '{output_csv2_path}': {e}")
 
 if __name__ == "__main__":
-
     main()
