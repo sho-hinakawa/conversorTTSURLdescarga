@@ -395,6 +395,74 @@ def main():
         with open(workshop_binary_path, 'wb') as f:
             f.write(workshop_response.content)
 
+        # --- BLOQUE JSON CustomDeck ---
+        usar_json = input("¿Deseas procesar un archivo JSON para descargar cartas (FaceURL/BackURL)? (si/no): ").strip().lower() in ['si', 's']
+        if usar_json:
+            json_files = [f for f in os.listdir(download_path) if f.lower().endswith('.json')]
+            if json_files:
+                json_path = os.path.join(download_path, json_files[0])
+                print(f"Usando JSON encontrado: {json_path}")
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as jf:
+                        json_data = json.load(jf)
+
+                    def find_all_customdecks(obj, found=None):
+                        if found is None:
+                            found = []
+                        if isinstance(obj, dict):
+                            for k, v in obj.items():
+                                if k == 'CustomDeck' and isinstance(v, dict):
+                                    found.append(v)
+                                else:
+                                    find_all_customdecks(v, found)
+                        elif isinstance(obj, list):
+                            for item in obj:
+                                find_all_customdecks(item, found)
+                        return found
+
+                    all_customdecks = find_all_customdecks(json_data)
+                    if not all_customdecks:
+                        print("No se encontró la clave 'CustomDeck' en el JSON. Se usará el flujo normal.")
+                    else:
+                        face_back_pairs = []
+                        idx = 1
+                        for deck in all_customdecks:
+                            for deck_id, deck_info in deck.items():
+                                face_url = deck_info.get('FaceURL')
+                                back_url = deck_info.get('BackURL')
+                                if face_url:
+                                    face_back_pairs.append((f"{idx}_a", face_url))
+                                if back_url:
+                                    face_back_pairs.append((f"{idx}_b", back_url))
+                                idx += 1
+                        print(f"Descargando imágenes de cartas encontradas en el JSON...")
+                        successful = 0
+                        failed = 0
+                        for name, url in face_back_pairs:
+                            print(f"Descargando {name} ...")
+                            try:
+                                response = verify_and_fetch_url(url)
+                                content = b''
+                                for chunk in response.iter_content(chunk_size=8192):
+                                    if chunk:
+                                        content += chunk
+                                ext = mimetypes.guess_extension(response.headers.get('content-type','').split(';')[0]) or ''
+                                file_path = os.path.join(download_path, f"{name}{ext}")
+                                with open(file_path, 'wb') as f:
+                                    f.write(content)
+                                print(f"Guardado: {file_path}")
+                                successful += 1
+                            except Exception as e:
+                                print(f"Error al descargar {name}: {e}")
+                                failed += 1
+                        print(f"\nDescarga terminada. Éxitos: {successful}, Fallos: {failed}")
+                        return
+                except Exception as e:
+                    print(f"Error al leer el JSON: {e}")
+            else:
+                print(f"No se encontró ningún archivo .json en la carpeta: {download_path}")
+        # --- FIN BLOQUE JSON ---
+
     except requests.exceptions.RequestException as e:
         print(f"Error al contactar la API o descargar el archivo principal: {e}")
         return
