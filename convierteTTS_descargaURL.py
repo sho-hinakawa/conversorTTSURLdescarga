@@ -384,6 +384,7 @@ def main():
 
         # --- BLOQUE JSON CustomDeck ---
         usar_json = input("¿Deseas procesar un archivo JSON para descargar cartas (FaceURL/BackURL)? (si/no): ").strip().lower() in ['si', 's']
+        faceback_from_json = False
         if usar_json:
             json_files = [f for f in os.listdir(download_path) if f.lower().endswith('.json')]
             if json_files:
@@ -444,7 +445,6 @@ def main():
                             except Exception as e:
                                 print(f"Error al descargar {name}: {e}")
                                 failed += 1
-                        
                         # Guardar las URLs descargadas en un archivo de texto
                         output_txt_json = f"{workshop_id}_descargadas.txt"
                         output_txt_json_path = os.path.join(download_path, output_txt_json)
@@ -457,7 +457,6 @@ def main():
                             print(f"Archivo de URLs descargadas generado: {output_txt_json_path}")
                         except Exception as e:
                             print(f"Error al generar el archivo TXT {output_txt_json_path}: {str(e)}")
-                        
                         # Mostrar resumen final para descargas desde JSON
                         print("\n=== Resumen Final (JSON) ===")
                         print(f"Workshop ID procesado: {workshop_id}")
@@ -466,15 +465,7 @@ def main():
                         print(f"Archivos descargados exitosamente: {successful}")
                         print(f"Archivos que fallaron: {failed}")
                         print(f"Archivo TXT de URLs descargadas generado: {output_txt_json_path}")
-                        
-                        # Eliminar el archivo binario después del procesamiento del JSON
-                        if os.path.exists(workshop_binary_path):
-                            try:
-                                os.remove(workshop_binary_path)
-                                print(f"Archivo binario '{workshop_binary_path}' eliminado tras procesamiento del JSON.")
-                            except OSError as e:
-                                print(f"No se pudo eliminar el archivo binario '{workshop_binary_path}': {e}")
-                        return
+                        faceback_from_json = True
                 except Exception as e:
                     print(f"Error al leer el JSON: {e}")
             else:
@@ -493,7 +484,6 @@ def main():
     try:
         with open(workshop_binary_path, 'rb') as file:
             content = file.read()
-        
         try:
             text = content.decode('utf-8', errors='ignore')
         except UnicodeDecodeError as e:
@@ -505,7 +495,6 @@ def main():
                 except OSError as e:
                     print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
             return
-        
         url_patterns = [
             (r'ImageURL\x00.*?(http[^\x00]+)\x00', 'ImageURL'),
             (r'FaceURL\x00.*?(http[^\x00]+)\x00', 'FaceURL'),
@@ -517,10 +506,12 @@ def main():
             (r'ImageSecondaryURL\x00.*?(http[^\x00]+)\x00', 'ImageSecondaryURL'),
             (r'PDFUrl\x00.*?(http[^\x00]+)\x00', 'PDFUrl')
         ]
-
         seen_urls = set()
         urls = []
         for pattern, url_type in url_patterns:
+            # Si se procesó el JSON, omitir FaceURL y BackURL del binario
+            if faceback_from_json and url_type in ['FaceURL', 'BackURL']:
+                continue
             matches = re.finditer(pattern, text, re.DOTALL)
             for match in matches:
                 url = match.group(1).strip()
@@ -532,10 +523,8 @@ def main():
                     if cleaned_url not in seen_urls:
                         seen_urls.add(cleaned_url)
                         urls.append((url_type, cleaned_url))
-        
         unique_urls = list(dict.fromkeys(urls))
         converted_urls_count = len(unique_urls)
-
         if not unique_urls:
             error_message = "No se encontraron URLs válidas"
             print(error_message)
@@ -545,9 +534,7 @@ def main():
                 except OSError as e:
                     print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
             return
-        
         print(f"Se extrajeron {converted_urls_count} URLs únicas.")
-
     except FileNotFoundError:
         error_message = f"El archivo {workshop_binary_path} no se encuentra."
         print(f"Error: {error_message}")
@@ -557,10 +544,8 @@ def main():
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
         return
-    
     output_csv2 = f"{workshop_id}_replaced.csv"
     output_csv2_path, replacements_made = replace_urls_in_csv(unique_urls, output_csv2, download_path)
-    
     if not output_csv2_path:
         error_message = "Error en el reemplazo de URLs. Proceso terminado."
         print(error_message)
@@ -570,15 +555,12 @@ def main():
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
         return
-    
     print(f"Se realizaron {replacements_made} reemplazos de URLs.")
-    
     try:
         # Leer el archivo CSV para descargar los archivos
         with open(output_csv2_path, 'r', encoding='utf-8-sig') as input_file:
             reader_csv = csv.reader(input_file)
             urls = list(reader_csv)
-        
         if not urls:
             error_message = "El archivo CSV con URLs para descargar está vacío."
             print(error_message)
@@ -588,7 +570,6 @@ def main():
                 except OSError as e:
                     print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
             return
-        
         # Crear archivo TXT con solo las URLs
         output_txt = f"{workshop_id}_replaced.txt"
         output_txt_path = os.path.join(download_path, output_txt)
@@ -604,11 +585,9 @@ def main():
         except Exception as e:
             error_message = f"Error al generar el archivo TXT {output_txt_path}: {str(e)}"
             print(f"Error: {error_message}")
-        
         successful_downloads = 0
         failed_downloads = 0
         skipped_files = 0
-        
         for index, row in enumerate(urls, start=1):
             if len(row) < 2:
                 error_message = f"Fila inválida en el CSV (menos de 2 columnas): {row}"
@@ -620,7 +599,6 @@ def main():
                 print(error_message)
                 continue
             success, result, skipped = download_file(url, download_path, index, pattern)
-            
             if success:
                 successful_downloads += 1
                 print(f"Descargado ({successful_downloads}/{len(urls)}): {result}")
@@ -628,9 +606,7 @@ def main():
                 skipped_files += 1
             else:
                 failed_downloads += 1
-            
             time.sleep(1) # Pausa de 1 segundo para no saturar el servidor
-        
         print("\n=== Resumen Final ===")
         print(f"Workshop ID procesado: {workshop_id}")
         print(f"Nombre Mod TTS: {workshop_title}")
@@ -641,7 +617,6 @@ def main():
         print(f"Archivos que fallaron: {failed_downloads}")
         print(f"Archivos omitidos: {skipped_files}")
         print(f"Archivo TXT de URLs reemplazadas generado: {output_txt_path}")
-            
     except Exception as e:
         error_message = f"Error inesperado en la fase de descarga de archivos: {str(e)}"
         print(f"Error: {error_message}")
