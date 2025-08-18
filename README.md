@@ -1,6 +1,6 @@
 # Descargador de archivos de TTS desde la URL del Workshop 
 
-Este script en Python permite descargan los archivos de un mod del Workshop de Tabletop Simulator dada la URL del Workshop un directorio dado por el nombre del mod o desde un archivo JSON de Tabletop Simulator
+Este script en Python permite descargan los archivos de un mod del Workshop de Tabletop Simulator dada la URL del Workshop un directorio dado por el nombre del mod
 
 **Creditos** Telegram @hinakawa y @alemarfar
 
@@ -15,7 +15,6 @@ Este script en Python permite descargan los archivos de un mod del Workshop de T
 - Identifica la extension del archivo identificando la cabecera leyendo los primeros 4096 bytes del archivo y comparandolos con archivos conocidos de TTS
 - Simula un navegador para los sitios de hosting de imagenes y reintenta la descarga de archivos si esta falla
 - Guarda automaticamente las URLs reemplazadas en un archivo TXT
-- Entrega la opcion de descragar desde el archivo JSON si se posee 
 - Verifica que la libreria request este instalada al ejecutar el script
 
 

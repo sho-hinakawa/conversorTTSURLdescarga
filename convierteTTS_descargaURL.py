@@ -1,36 +1,33 @@
 # Script para descargar un mod de Tabletop Simulator usando su URL de la Workshop.
 # Extrae el ID de la URL, descarga el archivo principal usando una API externa, extrae URLs de archivos
-# (imágenes, modelos 3D, pdf.) de ese archivo, utilizando los patrones especificados correspondientes 
+# (imagenes, modelos 3D, pdf.) de ese archivo, utilizando los patrones especificados correspondientes 
 # a los campos de datos.
-# Reemplaza las URLs antiguas por unas válidas y descarga todos los archivos
-# en un directorio automáticamente con el nombre del mod.
-# Maneja errores como URLs inválidas, permisos de escritura.
+# Reemplaza las URLs antiguas por unas validas y descarga todos los archivos
+# en un directorio automaticamente con el nombre del mod.
+# Maneja errores como URLs invalidas, permisos de escritura.
 # Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
-# Simula un navegador para servicio de alojamiento de imágenes y reintenta cuando la descarga falla.
-# Da la opción de si se posee el archivo JSON descargar el frente y la trasera de las cartas.
-# Guarda automáticamente las URLs utilizadas TXT en caso de requerirlo a posterior.
+# Simula un navegador para servicio de alojamiento de imagenes y reintenta cuando la descarga falla.
+# Guarda automaticamente las URLs utilizadas TXT en caso de requerirlo a posterior.
 # Muestra al final un resumen del proceso de descarga.
-# Verifica si la biblioteca 'requests' está instalada, mostrando un mensaje de instalación si falta.
+# Verifica si la biblioteca 'requests' esta instalada, mostrando un mensaje de instalacion si falta.
 
-# Créditos: Telegram @hinakawa y @alemarfar
+# Creditos: Telegram @hinakawa y @alemarfar
 
 try:
     import requests
 except ImportError:
-    print("Error: El módulo 'requests' no está instalado. Instálelo con 'pip install requests'.")
+    print("Error: El modulo 'requests' no esta instalado. Instalelo con 'pip install requests'.")
     exit(1)
 
 import re
 import os
 import csv
-import json
 import mimetypes
 import time
 import shutil
 from urllib.parse import urlparse
-from datetime import datetime
 
-# Función para extraer el ID de una URL de Steam Community
+# Funcion para extraer el ID de una URL de Steam Community
 def extract_steam_id(url):
     pattern = r'id=(\d+)'
     match = re.search(pattern, url)
@@ -44,7 +41,7 @@ def clean_url(url):
         print(f"Error al limpiar URL {url}: {str(e)}")
         return None
 
-# Reemplaza URLs específicas en una lista de URLs y guarda el resultado en un CSV temporal
+# Reemplaza URLs especificas en una lista de URLs y guarda el resultado en un CSV temporal
 def replace_urls_in_csv(urls, output_filename, download_path):
     archivo_salida_csv = os.path.join(download_path, output_filename)
     
@@ -55,7 +52,7 @@ def replace_urls_in_csv(urls, output_filename, download_path):
     
     try:
         if not urls:
-            error_message = "La lista de URLs está vacía."
+            error_message = "La lista de URLs esta vacia."
             print(error_message)
             return None, 0
         
@@ -77,7 +74,7 @@ def replace_urls_in_csv(urls, output_filename, download_path):
             if filas_reemplazadas:
                 escritor_csv.writerows(filas_reemplazadas)
             else:
-                escritor_csv.writerow(["Mensaje", "No se encontraron URLs válidas o todas eran duplicadas"])
+                escritor_csv.writerow(["Mensaje", "No se encontraron URLs validas o todas eran duplicadas"])
         
         print("\nResumen de procesamiento:")
         print(f"Filas procesadas: {len(urls)}")
@@ -104,14 +101,14 @@ def verify_and_fetch_url(url):
                 return response
             elif response.status_code == 429:
                 if i == retries - 1:
-                    raise requests.exceptions.RequestException(f"Código HTTP {response.status_code}")
+                    raise requests.exceptions.RequestException(f"Codigo HTTP {response.status_code}")
                 
                 print(f"Aviso: Demasiadas peticiones al servidor. Esperando {delay} segundos antes de reintentar...")
                 time.sleep(delay)
                 delay *= 2
                 continue
             else:
-                error_message = f"Código HTTP {response.status_code}"
+                error_message = f"Codigo HTTP {response.status_code}"
                 raise requests.exceptions.RequestException(error_message)
         except requests.exceptions.RequestException as e:
             if i == retries - 1:
@@ -120,9 +117,9 @@ def verify_and_fetch_url(url):
             print(f"Error en intento {i+1}/{retries} para URL {url}: {str(e)}. Reintentando en {delay} segundos...")
             time.sleep(delay)
 
-    raise requests.exceptions.RequestException(f"No se pudo obtener la URL {url} después de {retries} intentos.")
+    raise requests.exceptions.RequestException(f"No se pudo obtener la URL {url} despues de {retries} intentos.")
 
-# Determina la extensión de un archivo basado en el tipo MIME de los encabezados
+# Determina la extension de un archivo basado en el tipo MIME de los encabezados
 def get_file_extension(file_path, headers):
     content_type = headers.get('content-type')
     if content_type:
@@ -149,7 +146,7 @@ HEADER_SIGNATURES = {
     'application/octet-stream': ['#', 'v ', 'f ', 'mtllib ', 'o ', 'g ', '\n', '\r\n', '\t', ' ']
 }
 
-# Verifica la firma de cabecera de un archivo para determinar su tipo y extensión
+# Verifica la firma de cabecera de un archivo para determinar su tipo y extension
 def verify_header_signature(content, pattern):
     try:
         if content.startswith(b'\xFF\xD8\xFF'):
@@ -182,7 +179,7 @@ def verify_header_signature(content, pattern):
 def download_file(url, download_path, index, pattern):
     try:
         if not url.startswith(('http://', 'https://')):
-            error_message = f"URL inválida (no comienza con http:// o https://): {url}"
+            error_message = f"URL invalida (no comienza con http:// o https://): {url}"
             print(error_message)
             return False, error_message, False
         
@@ -209,25 +206,25 @@ def download_file(url, download_path, index, pattern):
         if pattern in ['FaceURL', 'BackURL']:
             if url_extension.lower() == '.bin':
                 if detected_mime_type not in ['image/jpeg', 'image/png']:
-                    error_message = f"Extensión .bin no permitida para {pattern}, firma no es imagen: {url}"
+                    error_message = f"Extension .bin no permitida para {pattern}, firma no es imagen: {url}"
                     print(error_message)
                     return False, error_message, False
                 url_extension = signature_extension
             elif detected_mime_type not in ['image/jpeg', 'image/png']:
-                error_message = f"Firma no válida para {pattern}: {detected_mime_type or 'desconocido'}: {url}"
+                error_message = f"Firma no valida para {pattern}: {detected_mime_type or 'desconocido'}: {url}"
                 print(error_message)
                 return False, error_message, False
         
         if pattern:
             if pattern == 'MeshURL':
                 if detected_mime_type != 'model/obj' and content_type not in ['model/obj', 'text/plain', 'application/octet-stream']:
-                    error_message = f"Firma o tipo MIME no válido para MeshURL: {detected_mime_type or content_type}: {url}"
+                    error_message = f"Firma o tipo MIME no valido para MeshURL: {detected_mime_type or content_type}: {url}"
                     print(error_message)
                     return False, error_message, False
                 filename = f"{pattern}_{index}.obj"
             elif pattern == 'PDFUrl':
                 if detected_mime_type != 'application/pdf' and content_type not in ['application/pdf']:
-                    error_message = f"Firma o tipo MIME no válido para PDFUrl: {detected_mime_type or content_type}: {url}"
+                    error_message = f"Firma o tipo MIME no valido para PDFUrl: {detected_mime_type or content_type}: {url}"
                     print(error_message)
                     return False, error_message, False
                 filename = f"{pattern}_{index}.pdf"
@@ -254,11 +251,11 @@ def download_file(url, download_path, index, pattern):
             if url_extension and url_extension.lower() != '.bin' and url_extension.lower() in [ext.lower() for ext in MIME_TO_EXTENSION.values()]:
                 filename = f"{name}_{index}{url_extension}"
             elif not new_extension and not signature_extension:
-                error_message = f"Sin extensión válida detectada: {url}"
+                error_message = f"Sin extension valida detectada: {url}"
                 print("Omitiendo archivo")
                 return False, error_message, True
             elif new_extension == '.bin' and not signature_extension:
-                error_message = f"Archivo sería nombrado como .bin: {url}"
+                error_message = f"Archivo seria nombrado como .bin: {url}"
                 print("Omitiendo archivo")
                 return False, error_message, True
         
@@ -284,7 +281,7 @@ def download_file(url, download_path, index, pattern):
                 new_extension = get_file_extension(file_path, response.headers)
                 if not new_extension and not signature_extension:
                     os.remove(file_path)
-                    error_message = f"No se pudo determinar la extensión del archivo: {url}"
+                    error_message = f"No se pudo determinar la extension del archivo: {url}"
                     print("Omitiendo archivo")
                     return False, error_message, True
                 if new_extension and not signature_extension and new_extension != '.bin':
@@ -316,21 +313,18 @@ def download_file(url, download_path, index, pattern):
 def main():
     print("=== Tabletop Simulator URL Descargador ===")
     
-    # Modo debug desactivado por defecto
-    debug_mode = False
-
-    # --- INICIO: LÓGICA PARA DESCARGAR DESDE URL ---
+    
     workshop_url = input("Ingrese la URL del Workshop de Steam: ").strip()
     workshop_id = extract_steam_id(workshop_url)
     if not workshop_id:
-        print("Error: No se pudo extraer un ID válido de la URL proporcionada.")
+        print("Error: No se pudo extraer un ID valido de la URL proporcionada.")
         return
 
-    # Construir URL de la API y obtener información
+    # Construir URL de la API y obtener informacion
     api_url = f"https://www.steamworkshopdownloader.cc/json?url=https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
     
     try:
-        print(f"Obteniendo información para el ID: {workshop_id}...")
+        print(f"Obteniendo informacion para el ID: {workshop_id}...")
         response = requests.get(api_url, timeout=30)
         response.raise_for_status()
         data = response.json()
@@ -342,7 +336,7 @@ def main():
             print("Error: No se pudo obtener la URL de descarga desde la API.")
             return
 
-        # Crear un nombre de directorio válido a partir del título del workshop
+        # Crear un nombre de directorio valido a partir del titulo del workshop
         safe_folder_name = re.sub(r'[<>:"/\\|?*\s]', '_', data.get("title", "WorkshopItem_Archivos"))
         download_path = os.path.join(os.getcwd(), safe_folder_name)
         workshop_binary_path = os.path.join(download_path, f"{workshop_id}")
@@ -372,7 +366,7 @@ def main():
             print(error_message)
             return
 
-        print(f"Los archivos se guardarán en: {download_path}")
+        print(f"Los archivos se guardaran en: {download_path}")
         
         # Descargar el archivo principal
         print(f"Descargando archivo principal de '{workshop_title}'...")
@@ -382,104 +376,13 @@ def main():
         with open(workshop_binary_path, 'wb') as f:
             f.write(workshop_response.content)
 
-        # --- BLOQUE JSON CustomDeck ---
-        usar_json = input("¿Deseas procesar un archivo JSON para descargar cartas (FaceURL/BackURL)? (si/no): ").strip().lower() in ['si', 's']
-        faceback_from_json = False
-        if usar_json:
-            json_files = [f for f in os.listdir(download_path) if f.lower().endswith('.json')]
-            if json_files:
-                json_path = os.path.join(download_path, json_files[0])
-                print(f"Usando JSON encontrado: {json_path}")
-                try:
-                    with open(json_path, 'r', encoding='utf-8') as jf:
-                        json_data = json.load(jf)
-
-                    def find_all_customdecks(obj, found=None):
-                        if found is None:
-                            found = []
-                        if isinstance(obj, dict):
-                            for k, v in obj.items():
-                                if k == 'CustomDeck' and isinstance(v, dict):
-                                    found.append(v)
-                                else:
-                                    find_all_customdecks(v, found)
-                        elif isinstance(obj, list):
-                            for item in obj:
-                                find_all_customdecks(item, found)
-                        return found
-
-                    all_customdecks = find_all_customdecks(json_data)
-                    if not all_customdecks:
-                        print("No se encontró la clave 'CustomDeck' en el JSON. Se usará el flujo normal.")
-                    else:
-                        face_back_pairs = []
-                        idx = 1
-                        for deck in all_customdecks:
-                            for deck_id, deck_info in deck.items():
-                                face_url = deck_info.get('FaceURL')
-                                back_url = deck_info.get('BackURL')
-                                if face_url:
-                                    face_back_pairs.append((f"{idx}_a", face_url))
-                                if back_url:
-                                    face_back_pairs.append((f"{idx}_b", back_url))
-                                idx += 1
-                        print(f"Descargando imágenes de cartas encontradas en el JSON...")
-                        successful = 0
-                        failed = 0
-                        downloaded_urls = []  # Lista para almacenar URLs descargadas
-                        for name, url in face_back_pairs:
-                            print(f"Descargando {name} ...")
-                            try:
-                                response = verify_and_fetch_url(url)
-                                content = b''
-                                for chunk in response.iter_content(chunk_size=8192):
-                                    if chunk:
-                                        content += chunk
-                                ext = mimetypes.guess_extension(response.headers.get('content-type','').split(';')[0]) or ''
-                                file_path = os.path.join(download_path, f"{name}{ext}")
-                                with open(file_path, 'wb') as f:
-                                    f.write(content)
-                                print(f"Guardado: {file_path}")
-                                successful += 1
-                                downloaded_urls.append(url)  # Agregar URL a la lista
-                            except Exception as e:
-                                print(f"Error al descargar {name}: {e}")
-                                failed += 1
-                        # Guardar las URLs descargadas en un archivo de texto
-                        output_txt_json = f"{workshop_id}_descargadas.txt"
-                        output_txt_json_path = os.path.join(download_path, output_txt_json)
-                        try:
-                            with open(output_txt_json_path, 'w', encoding='utf-8', newline='') as txt_file:
-                                if downloaded_urls:
-                                    txt_file.write('\n'.join(downloaded_urls))
-                                else:
-                                    txt_file.write("No se descargaron URLs válidas desde el JSON")
-                            print(f"Archivo de URLs descargadas generado: {output_txt_json_path}")
-                        except Exception as e:
-                            print(f"Error al generar el archivo TXT {output_txt_json_path}: {str(e)}")
-                        # Mostrar resumen final para descargas desde JSON
-                        print("\n=== Resumen Final (JSON) ===")
-                        print(f"Workshop ID procesado: {workshop_id}")
-                        print(f"Nombre Mod TTS: {workshop_title}")
-                        print(f"URLs procesadas para descarga: {len(face_back_pairs)}")
-                        print(f"Archivos descargados exitosamente: {successful}")
-                        print(f"Archivos que fallaron: {failed}")
-                        print(f"Archivo TXT de URLs descargadas generado: {output_txt_json_path}")
-                        faceback_from_json = True
-                except Exception as e:
-                    print(f"Error al leer el JSON: {e}")
-            else:
-                print(f"No se encontró ningún archivo .json en la carpeta: {download_path}")
-        # --- FIN BLOQUE JSON ---
-
     except requests.exceptions.RequestException as e:
         print(f"Error al contactar la API o descargar el archivo principal: {e}")
         return
     except json.JSONDecodeError:
-        print("Error: La respuesta de la API no es un JSON válido.")
+        print("Error: La respuesta de la API no es un JSON valido.")
         return
-    # --- FIN: LÓGICA PARA DESCARGAR DESDE URL ---
-
+    
     # Extraer URLs directamente del archivo binario
     try:
         with open(workshop_binary_path, 'rb') as file:
@@ -496,22 +399,20 @@ def main():
                     print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
             return
         url_patterns = [
-            (r'ImageURL\x00.*?(http[^\x00]+)\x00', 'ImageURL'),
             (r'FaceURL\x00.*?(http[^\x00]+)\x00', 'FaceURL'),
             (r'BackURL\x00.*?(http[^\x00]+)\x00', 'BackURL'),
             (r'MeshURL\x00.*?(http[^\x00]+)\x00', 'MeshURL'),
-            (r'DiffuseURL\x00.*?(http[^\x00]+)\x00', 'DiffuseURL'),
+            (r'PDFUrl\x00.*?(http[^\x00]+)\x00', 'PDFUrl'),
+            (r'ImageURL\x00.*?(http[^\x00]+)\x00', 'ImageURL'),
+            (r'ImageSecondaryURL\x00.*?(http[^\x00]+)\x00', 'ImageSecondaryURL'),
             (r'AssetbundleURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleURL'),
             (r'AssetbundleSecondaryURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleSecondaryURL'),
-            (r'ImageSecondaryURL\x00.*?(http[^\x00]+)\x00', 'ImageSecondaryURL'),
-            (r'PDFUrl\x00.*?(http[^\x00]+)\x00', 'PDFUrl')
+            (r'DiffuseURL\x00.*?(http[^\x00]+)\x00', 'DiffuseURL')
+            
         ]
         seen_urls = set()
         urls = []
         for pattern, url_type in url_patterns:
-            # Si se procesó el JSON, omitir FaceURL y BackURL del binario
-            if faceback_from_json and url_type in ['FaceURL', 'BackURL']:
-                continue
             matches = re.finditer(pattern, text, re.DOTALL)
             for match in matches:
                 url = match.group(1).strip()
@@ -526,7 +427,7 @@ def main():
         unique_urls = list(dict.fromkeys(urls))
         converted_urls_count = len(unique_urls)
         if not unique_urls:
-            error_message = "No se encontraron URLs válidas"
+            error_message = "No se encontraron URLs validas"
             print(error_message)
             if os.path.exists(workshop_binary_path):
                 try:
@@ -534,7 +435,7 @@ def main():
                 except OSError as e:
                     print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
             return
-        print(f"Se extrajeron {converted_urls_count} URLs únicas.")
+        print(f"Se extrajeron {converted_urls_count} URLs unicas.")
     except FileNotFoundError:
         error_message = f"El archivo {workshop_binary_path} no se encuentra."
         print(f"Error: {error_message}")
@@ -562,7 +463,7 @@ def main():
             reader_csv = csv.reader(input_file)
             urls = list(reader_csv)
         if not urls:
-            error_message = "El archivo CSV con URLs para descargar está vacío."
+            error_message = "El archivo CSV con URLs para descargar esta vacio."
             print(error_message)
             if os.path.exists(workshop_binary_path):
                 try:
@@ -581,7 +482,7 @@ def main():
                 if urls_for_txt:
                     txt_file.write('\n'.join(urls_for_txt))
                 else:
-                    txt_file.write("No se encontraron URLs válidas en el CSV")
+                    txt_file.write("No se encontraron URLs validas en el CSV")
         except Exception as e:
             error_message = f"Error al generar el archivo TXT {output_txt_path}: {str(e)}"
             print(f"Error: {error_message}")
@@ -590,12 +491,12 @@ def main():
         skipped_files = 0
         for index, row in enumerate(urls, start=1):
             if len(row) < 2:
-                error_message = f"Fila inválida en el CSV (menos de 2 columnas): {row}"
+                error_message = f"Fila invalida en el CSV (menos de 2 columnas): {row}"
                 print(error_message)
                 continue
             pattern, url = row[0], row[1]
             if not url:
-                error_message = f"URL vacía para el patrón {pattern}"
+                error_message = f"URL vacia para el patron {pattern}"
                 print(error_message)
                 continue
             success, result, skipped = download_file(url, download_path, index, pattern)
@@ -610,13 +511,14 @@ def main():
         print("\n=== Resumen Final ===")
         print(f"Workshop ID procesado: {workshop_id}")
         print(f"Nombre Mod TTS: {workshop_title}")
-        print(f"URLs extraídas: {converted_urls_count}")
+        print(f"URLs extraidas: {converted_urls_count}")
         print(f"Reemplazos realizados: {replacements_made}")
         print(f"URLs procesadas para descarga: {len(urls)}")
         print(f"Archivos descargados exitosamente: {successful_downloads}")
         print(f"Archivos que fallaron: {failed_downloads}")
-        print(f"Archivos omitidos: {skipped_files}")
-        print(f"Archivo TXT de URLs reemplazadas generado: {output_txt_path}")
+        print(f"Archivos omitidos (extensiones invalidas): {skipped_files}")
+        print(f"Archivo TXT de URLs reemplazadas: {output_txt_path}")
+        print(f"Archivo CSV de URLs reemplazadas: {output_csv2_path}")
     except Exception as e:
         error_message = f"Error inesperado en la fase de descarga de archivos: {str(e)}"
         print(f"Error: {error_message}")
@@ -628,13 +530,6 @@ def main():
                 print(f"Archivo binario '{workshop_binary_path}' eliminado.")
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
-        # Limpiar el archivo CSV reemplazado
-        if os.path.exists(output_csv2_path):
-            try:
-                os.remove(output_csv2_path)
-                print(f"Archivo CSV '{output_csv2_path}' eliminado.")
-            except OSError as e:
-                print(f"No se pudo eliminar el archivo CSV '{output_csv2_path}': {e}")
 
 if __name__ == "__main__":
     main()
