@@ -313,7 +313,6 @@ def download_file(url, download_path, index, pattern):
 def main():
     print("=== Tabletop Simulator URL Descargador ===")
     
-    
     workshop_url = input("Ingrese la URL del Workshop de Steam: ").strip()
     workshop_id = extract_steam_id(workshop_url)
     if not workshop_id:
@@ -408,7 +407,6 @@ def main():
             (r'AssetbundleURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleURL'),
             (r'AssetbundleSecondaryURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleSecondaryURL'),
             (r'DiffuseURL\x00.*?(http[^\x00]+)\x00', 'DiffuseURL')
-            
         ]
         seen_urls = set()
         urls = []
@@ -508,6 +506,15 @@ def main():
             else:
                 failed_downloads += 1
             time.sleep(1) # Pausa de 1 segundo para no saturar el servidor
+        # Si no hubo descargas exitosas, eliminar archivos TXT y CSV
+        if successful_downloads == 0:
+            for file_path in [output_txt_path, output_csv2_path]:
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        print(f"Archivo '{file_path}' eliminado debido a que no hubo descargas exitosas.")
+                    except OSError as e:
+                        print(f"No se pudo eliminar el archivo '{file_path}': {e}")
         print("\n=== Resumen Final ===")
         print(f"Workshop ID procesado: {workshop_id}")
         print(f"Nombre Mod TTS: {workshop_title}")
@@ -517,8 +524,9 @@ def main():
         print(f"Archivos descargados exitosamente: {successful_downloads}")
         print(f"Archivos que fallaron: {failed_downloads}")
         print(f"Archivos omitidos (extensiones invalidas): {skipped_files}")
-        print(f"Archivo TXT de URLs reemplazadas: {output_txt_path}")
-        print(f"Archivo CSV de URLs reemplazadas: {output_csv2_path}")
+        if successful_downloads > 0:
+            print(f"Archivo TXT de URLs reemplazadas: {output_txt_path}")
+            print(f"Archivo CSV de URLs reemplazadas: {output_csv2_path}")
     except Exception as e:
         error_message = f"Error inesperado en la fase de descarga de archivos: {str(e)}"
         print(f"Error: {error_message}")
@@ -527,7 +535,6 @@ def main():
         if os.path.exists(workshop_binary_path):
             try:
                 os.remove(workshop_binary_path)
-                print(f"Archivo binario '{workshop_binary_path}' eliminado.")
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
 
