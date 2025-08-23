@@ -538,5 +538,62 @@ def main():
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
 
+        # --- DESCARGA AUTOMÁTICA DE CARTAS (BINARIO) ---
+        # Extrae FaceURL y BackURL, elimina duplicados y mantiene correspondencia de pares
+        face_urls = []
+        back_urls = []
+        face_seen = set()
+        back_seen = set()
+        for pattern, url in unique_urls:
+            if pattern == 'FaceURL' and url not in face_seen:
+                face_urls.append(url)
+                face_seen.add(url)
+            elif pattern == 'BackURL' and url not in back_seen:
+                back_urls.append(url)
+                back_seen.add(url)
+        downloaded_urls_bin = set()
+        for idx in range(max(len(face_urls), len(back_urls))):
+            # Frontal
+            if idx < len(face_urls):
+                url = face_urls[idx]
+                if url not in downloaded_urls_bin:
+                    nombre = f"{idx+1}_a"
+                    try:
+                        response = verify_and_fetch_url(url)
+                        content = b''.join(response.iter_content(chunk_size=8192))
+                        ext = mimetypes.guess_extension(response.headers.get('content-type','').split(';')[0]) or ''
+                        file_path = os.path.join(download_path, f"{nombre}{ext}")
+                        with open(file_path, 'wb') as f:
+                            f.write(content)
+                        print(f"Guardado: {file_path}")
+                        downloaded_urls_bin.add(url)
+                    except Exception as e:
+                        print(f"Error al descargar {nombre}: {e}")
+            # Trasera
+            if idx < len(back_urls):
+                url = back_urls[idx]
+                if url not in downloaded_urls_bin:
+                    nombre = f"{idx+1}_b"
+                    try:
+                        response = verify_and_fetch_url(url)
+                        content = b''.join(response.iter_content(chunk_size=8192))
+                        ext = mimetypes.guess_extension(response.headers.get('content-type','').split(';')[0]) or ''
+                        file_path = os.path.join(download_path, f"{nombre}{ext}")
+                        with open(file_path, 'wb') as f:
+                            f.write(content)
+                        print(f"Guardado: {file_path}")
+                        downloaded_urls_bin.add(url)
+                    except Exception as e:
+                        print(f"Error al descargar {nombre}: {e}")
+
+        # Eliminar duplicados de la lista general de descarga
+        urls_no_duplicadas = []
+        url_set_general = set()
+        for pattern, url in urls:
+            if url not in url_set_general:
+                urls_no_duplicadas.append((pattern, url))
+                url_set_general.add(url)
+        urls = urls_no_duplicadas
+
 if __name__ == "__main__":
     main()
