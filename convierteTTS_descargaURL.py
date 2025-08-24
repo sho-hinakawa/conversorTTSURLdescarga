@@ -1,3 +1,18 @@
+# Script para descargar un mod de Tabletop Simulator usando su URL de la Workshop.
+# Extrae el ID de la URL, descarga el archivo principal usando una API externa, extrae URLs de archivos
+# (imagenes, modelos 3D, pdf.) de ese archivo, utilizando los patrones especificados correspondientes 
+# a los campos de datos.
+# Reemplaza las URLs antiguas por unas validas y descarga todos los archivos
+# en un directorio automaticamente con el nombre del mod.
+# Maneja errores como URLs invalidas, permisos de escritura.
+# Evita descargas duplicadas y valida extensiones de archivo mediante firmas de cabecera y tipos MIME.
+# Simula un navegador para servicio de alojamiento de imagenes y reintenta cuando la descarga falla.
+# Guarda automaticamente las URLs utilizadas TXT en caso de requerirlo a posterior.
+# Muestra al final un resumen del proceso de descarga.
+# Verifica si la biblioteca 'requests' esta instalada, mostrando un mensaje de instalacion si falta.
+
+# Creditos: Telegram @hinakawa y @alemarfar
+
 try:
     import requests
 except ImportError:
@@ -74,50 +89,34 @@ def replace_urls_in_csv(urls, output_filename, download_path):
 
 # Verifica la accesibilidad de una URL y obtiene su contenido
 def verify_and_fetch_url(url):
-    retries = 5
-    delay = 10  # segundos
-    parsed_url = urlparse(url)
-    netloc = parsed_url.netloc.lower()
-    
+    retries = 3
+    delay = 5  # segundos
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'image/*,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
-    
-    if netloc.startswith('steamcommunity.com') or netloc.startswith('steamusercontent.com'):
-        headers['Referer'] = 'https://steamcommunity.com/'
-    elif netloc.startswith('i.imgur.com'):
-        headers['Referer'] = 'https://imgur.com/'
-    
-    for attempt in range(retries):
+    for i in range(retries):
         try:
-            response = requests.get(url, stream=True, allow_redirects=True, timeout=15, headers=headers)
+            response = requests.get(url, stream=True, allow_redirects=True, timeout=10, headers=headers)
             if response.status_code == 200:
                 return response
             elif response.status_code == 429:
-                if attempt == retries - 1:
-                    raise requests.exceptions.RequestException(f"Codigo HTTP {response.status_code}: Demasiadas peticiones")
-                print(f"Aviso: Demasiadas peticiones al servidor ({url}). Esperando {delay} segundos...")
+                if i == retries - 1:
+                    raise requests.exceptions.RequestException(f"Codigo HTTP {response.status_code}")
+                
+                print(f"Aviso: Demasiadas peticiones al servidor. Esperando {delay} segundos antes de reintentar...")
                 time.sleep(delay)
                 delay *= 2
                 continue
-            elif response.status_code == 403:
-                print(f"Error 403 en {url}. Posible restricción del servidor.")
-                if attempt < retries - 1 and 'Referer' in headers:
-                    print(f"Reintentando sin Referer para {url}...")
-                    headers.pop('Referer', None)
-                    time.sleep(delay)
-                    continue
-                raise requests.exceptions.RequestException(f"Codigo HTTP 403")
             else:
-                raise requests.exceptions.RequestException(f"Codigo HTTP {response.status_code} para {url}")
+                error_message = f"Codigo HTTP {response.status_code}"
+                raise requests.exceptions.RequestException(error_message)
         except requests.exceptions.RequestException as e:
-            if attempt == retries - 1:
-                raise requests.exceptions.RequestException(f"Error final al verificar URL {url} tras {retries} intentos: {str(e)}")
-            print(f"Error en intento {attempt+1}/{retries} para URL {url}: {str(e)}. Reintentando en {delay} segundos...")
+            if i == retries - 1:
+                error_message = f"Error final al verificar URL {url} tras {retries} intentos: {str(e)}"
+                raise e
+            print(f"Error en intento {i+1}/{retries} para URL {url}: {str(e)}. Reintentando en {delay} segundos...")
             time.sleep(delay)
-    
+
     raise requests.exceptions.RequestException(f"No se pudo obtener la URL {url} despues de {retries} intentos.")
 
 # Determina la extension de un archivo basado en el tipo MIME de los encabezados
@@ -525,6 +524,9 @@ def main():
         print(f"Archivos descargados exitosamente: {successful_downloads}")
         print(f"Archivos que fallaron: {failed_downloads}")
         print(f"Archivos omitidos (extensiones invalidas): {skipped_files}")
+        if successful_downloads > 0:
+            print(f"Archivo TXT de URLs reemplazadas: {output_txt_path}")
+            print(f"Archivo CSV de URLs reemplazadas: {output_csv2_path}")
     except Exception as e:
         error_message = f"Error inesperado en la fase de descarga de archivos: {str(e)}"
         print(f"Error: {error_message}")
@@ -535,96 +537,6 @@ def main():
                 os.remove(workshop_binary_path)
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
-
-        print("Comenzando pareo frontales con traseras")
-        
-        face_urls = []
-        back_urls = []
-        face_seen = set()
-        back_seen = set()
-        for pattern, url in unique_urls:
-            if pattern == 'FaceURL' and url not in face_seen:
-                if 'cloud-3.steamusercontent.com' in url.lower():
-                    url_modificada = url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net')
-                else:
-                    url_modificada = url
-                face_urls.append(url_modificada)
-                face_seen.add(url_modificada)
-            elif pattern == 'BackURL' and url not in back_seen:
-                if 'cloud-3.steamusercontent.com' in url.lower():
-                    url_modificada = url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net')
-                else:
-                    url_modificada = url
-                back_urls.append(url_modificada)
-                back_seen.add(url_modificada)
-        
-        print(f"Se descargarán {len(face_urls)} delanteras y {len(back_urls)} traseras")
-        
-        downloaded_urls_bin = set()
-        successful_face_downloads = 0
-        successful_back_downloads = 0
-        failed_face_downloads = 0
-        failed_back_downloads = 0
-        
-        for idx in range(max(len(face_urls), len(back_urls))):
-            # Frontal
-            if idx < len(face_urls):
-                url = face_urls[idx]
-                if url not in downloaded_urls_bin:
-                    nombre = f"{idx+1}_a"
-                    try:
-                        response = verify_and_fetch_url(url)
-                        content = b''.join(response.iter_content(chunk_size=8192))
-                        ext = mimetypes.guess_extension(response.headers.get('content-type','').split(';')[0]) or ''
-                        file_path = os.path.join(download_path, f"{nombre}{ext}")
-                        with open(file_path, 'wb') as f:
-                            f.write(content)
-                        print(f"Guardado Frontal: {file_path}")
-                        downloaded_urls_bin.add(url)
-                        successful_face_downloads += 1
-                    except Exception as e:
-                        print(f"Error al descargar {nombre} desde {url}: {e}")
-                        failed_face_downloads += 1
-                    time.sleep(1)  # Retraso para evitar saturar el servidor
-            # Trasera
-            if idx < len(back_urls):
-                url = back_urls[idx]
-                if url not in downloaded_urls_bin:
-                    nombre = f"{idx+1}_b"
-                    try:
-                        response = verify_and_fetch_url(url)
-                        content = b''.join(response.iter_content(chunk_size=8192))
-                        ext = mimetypes.guess_extension(response.headers.get('content-type','').split(';')[0]) or ''
-                        file_path = os.path.join(download_path, f"{nombre}{ext}")
-                        with open(file_path, 'wb') as f:
-                            f.write(content)
-                        print(f"Guardado Trasera: {file_path}")
-                        downloaded_urls_bin.add(url)
-                        successful_back_downloads += 1
-                    except Exception as e:
-                        print(f"Error al descargar {nombre} desde {url}: {e}")
-                        failed_back_downloads += 1
-                    time.sleep(1)  # Retraso para evitar saturar el servidor
-        
-        # Resumen de descargas de FaceURL y BackURL
-        print("\n=== Resumen de Pareo de Cartas ===")
-        print(f"Se parearon exitosamente {successful_face_downloads} frontales con {successful_back_downloads} traseras")
-        if failed_face_downloads > 0:
-            print(f"Fallaron en la descarga {failed_face_downloads} frontales")
-        if failed_back_downloads > 0: 
-            print(f"Fallaron en la descarga {failed_back_downloads} traseras")
-        
-        if successful_downloads > 0:
-            print(f"Archivo TXT de URLs reemplazadas: {output_txt_path}")
-            print(f"Archivo CSV de URLs reemplazadas: {output_csv2_path}")
-
-        # Eliminar duplicados de la lista general de descarga
-        urls_no_duplicadas = []
-        url_set_general = set()
-        for pattern, url in unique_urls:
-            if url not in url_set_general:
-                urls_no_duplicadas.append((pattern, url_modificada))
-                url_set_general.add(url_modificada)
 
 if __name__ == "__main__":
     main()

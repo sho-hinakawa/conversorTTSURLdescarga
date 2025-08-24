@@ -14,9 +14,7 @@ Este script en Python permite descargan los archivos de un mod del Workshop de T
 - Descarga las URLs indicando nombre del campo de datos utilizando el metodo HTTP GET a un directorio con el nombre del mod o a uno especificado por el usuario si ya existe
 - Identifica la extension del archivo identificando la cabecera leyendo los primeros 4096 bytes del archivo y comparandolos con archivos conocidos de TTS
 - Simula un navegador para los sitios de hosting de imagenes y reintenta la descarga de archivos si esta falla
-- Guarda los patrones encontrados en un archivo CSV
 - Guarda automaticamente las URLs reemplazadas en un archivo TXT
-- Realiza el pareo de las cartas Frontales con las Traseras de acuerdo a como se van leyendo en el archivo 
 - Verifica que la libreria request este instalada al ejecutar el script
 
 
