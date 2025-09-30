@@ -670,6 +670,15 @@ def main():
                         print(f"Archivo '{file_path}' eliminado debido a que no hubo descargas exitosas.")
                     except OSError as e:
                         print(f"No se pudo eliminar el archivo '{file_path}': {e}")
+        
+        # Preguntar al usuario si desea iniciar el modo pareo de frontales con traseras
+        while True:
+            pair_mode = input("\n¿Desea iniciar el modo pareo de frontales con traseras? (s/n): ").strip().lower()
+            if pair_mode in ['s', 'n']:
+                pair_mode = pair_mode == 's'
+                break
+            print("Por favor, ingrese 's' para sí o 'n' para no.")
+
     except Exception as e:
         error_message = f"Error inesperado en la fase de descarga de archivos: {str(e)}"
         print(f"Error: {error_message}")
@@ -681,8 +690,9 @@ def main():
             except OSError as e:
                 print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
 
-        # Llamar a la funcion para parear y descargar frontales y traseras
-        successful_face_downloads, successful_back_downloads, failed_face_downloads, failed_back_downloads, skipped_face_files, skipped_back_files = pair_and_download_cards(unique_urls, download_path)
+        # Llamar a la funcion para parear y descargar frontales y traseras solo si el usuario lo seleccionó
+        if pair_mode:
+            successful_face_downloads, successful_back_downloads, failed_face_downloads, failed_back_downloads, skipped_face_files, skipped_back_files = pair_and_download_cards(unique_urls, download_path)
         
         # Imprimir resumen final
         print("\n=== Resumen Final ===")
@@ -694,15 +704,18 @@ def main():
         print(f"Archivos descargados exitosamente: {successful_downloads}")
         print(f"Archivos que fallaron: {failed_downloads}")
         print(f"Archivos omitidos (extensiones invalidas): {skipped_files}")
-        print(f"Se parearon exitosamente {successful_face_downloads} frontales con {successful_back_downloads} traseras")
-        if failed_face_downloads > 0:
-            print(f"Fallaron en la descarga {failed_face_downloads} frontales")
-        if failed_back_downloads > 0: 
-            print(f"Fallaron en la descarga {failed_back_downloads} traseras")
-        if skipped_face_files > 0:
-            print(f"Archivos frontales omitidos (extensiones inválidas): {skipped_face_files}")
-        if skipped_back_files > 0:
-            print(f"Archivos traseros omitidos (extensiones inválidas): {skipped_back_files}")
+        if pair_mode:
+            print(f"Se parearon exitosamente {successful_face_downloads} frontales con {successful_back_downloads} traseras")
+            if failed_face_downloads > 0:
+                print(f"Fallaron en la descarga {failed_face_downloads} frontales")
+            if failed_back_downloads > 0: 
+                print(f"Fallaron en la descarga {failed_back_downloads} traseras")
+            if skipped_face_files > 0:
+                print(f"Archivos frontales omitidos (extensiones inválidas): {skipped_face_files}")
+            if skipped_back_files > 0:
+                print(f"Archivos traseros omitidos (extensiones inválidas): {skipped_back_files}")
+        else:
+            print("Modo pareo de frontales y traseras no activado.")
         
         if successful_downloads > 0:
             print(f"\nArchivo TXT de URLs reemplazadas: {output_txt_path or 'No generado'}")
