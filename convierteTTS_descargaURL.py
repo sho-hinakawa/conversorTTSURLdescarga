@@ -74,8 +74,8 @@ def replace_urls_in_csv(urls, output_filename, download_path):
 
 # Verifica la accesibilidad de una URL y obtiene su contenido
 def verify_and_fetch_url(url):
-    retries = 5
-    delay = 10  # segundos
+    retries = 3
+    delay = 5  # segundos
     parsed_url = urlparse(url)
     netloc = parsed_url.netloc.lower()
     
