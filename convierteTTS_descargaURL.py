@@ -12,7 +12,7 @@ import time
 import shutil
 from urllib.parse import urlparse
 
-# Funcion para extraer el ID de una URL de Steam Community
+# Función para extraer el ID de una URL de Steam Community
 def extract_steam_id(url):
     pattern = r'id=(\d+)'
     match = re.search(pattern, url)
@@ -26,7 +26,7 @@ def clean_url(url):
         print(f"Error al limpiar URL {url}: {str(e)}")
         return None
 
-# Reemplaza URLs especificas en una lista de URLs y guarda el resultado en un CSV temporal
+# Reemplaza URLs específicas en una lista de URLs y guarda el resultado en un CSV temporal
 def replace_urls_in_csv(urls, output_filename, download_path):
     archivo_salida_csv = os.path.join(download_path, output_filename)
     
@@ -61,7 +61,7 @@ def replace_urls_in_csv(urls, output_filename, download_path):
             else:
                 escritor_csv.writerow(["Mensaje", "No se encontraron URLs validas o todas eran duplicadas"])
         
-        print("\nComenzando procesamiento...:")
+        print("\nComenzando procesamiento...")
         print(f"Filas procesadas: {len(urls)}")
         print(f"Reemplazos realizados: {len(filas_reemplazadas)}")
         
@@ -116,7 +116,7 @@ def verify_and_fetch_url(url):
     
     raise requests.exceptions.RequestException(f"No se pudo obtener la URL {url} despues de {retries} intentos.")
 
-# Determina la extension de un archivo basado en el tipo MIME de los encabezados
+# Determina la extensión de un archivo basado en el tipo MIME de los encabezados
 def get_file_extension(file_path, headers):
     content_type = headers.get('content-type')
     if content_type:
@@ -145,7 +145,6 @@ HEADER_SIGNATURES = {
     'application/octet-stream': ['#', 'v ', 'f ', 'mtllib ', 'o ', 'g ', '\n', '\r\n', '\t', ' ']
 }
 
-# Verifica la firma de cabecera de un archivo para determinar su tipo y extension
 def verify_header_signature(content, pattern):
     try:
         if content.startswith(b'\xFF\xD8\xFF'):
@@ -204,6 +203,7 @@ def download_file(url, download_path, index, pattern):
         
         detected_mime_type, signature_extension = verify_header_signature(content, pattern)
         
+        # Validaciones específicas por tipo
         if pattern in ['FaceURL', 'BackURL']:
             if url_extension.lower() == '.bin':
                 if detected_mime_type not in ['image/jpeg', 'image/png', 'image/bmp']:
@@ -230,7 +230,7 @@ def download_file(url, download_path, index, pattern):
                     return False, error_message, False
                 filename = f"{pattern}_{index}.pdf"
             elif pattern in ['FaceURL', 'BackURL']:
-                filename = f"{pattern}_{index}{signature_extension}"
+                filename = f"{pattern}_{index}{signature_extension or url_extension}"
             else:
                 filename = f"{pattern}_{index}"
                 if detected_mime_type and signature_extension:
@@ -247,24 +247,11 @@ def download_file(url, download_path, index, pattern):
                 else:
                     filename = f"{name}_{index}{ext}"
         
-        if pattern not in ['MeshURL', 'PDFUrl', 'FaceURL', 'BackURL']:
-            new_extension = get_file_extension(None, response.headers)
-            if url_extension and url_extension.lower() != '.bin' and url_extension.lower() in [ext.lower() for ext in MIME_TO_EXTENSION.values()]:
-                filename = f"{name}_{index}{url_extension}"
-            elif not new_extension and not signature_extension:
-                error_message = f"Sin extension valida detectada: {url}"
-                print("Omitiendo archivo")
-                return False, error_message, True
-            elif new_extension == '.bin' and not signature_extension:
-                error_message = f"Archivo seria nombrado como .bin: {url}"
-                print("Omitiendo archivo")
-                return False, error_message, True
-        
         file_path = os.path.join(download_path, filename)
         counter = 1
         while os.path.exists(file_path):
             name, ext = os.path.splitext(filename)
-            name = name.rsplit('_', 1)[0]
+            name = name.rsplit('_', 1)[0] if '_' in name else name
             filename = f"{name}_{index}_{counter}{ext}"
             file_path = os.path.join(download_path, filename)
             counter += 1
@@ -275,34 +262,6 @@ def download_file(url, download_path, index, pattern):
                 if chunk:
                     f.write(chunk)
         
-        if pattern not in ['MeshURL', 'PDFUrl', 'FaceURL', 'BackURL']:
-            name, url_extension = os.path.splitext(os.path.basename(parsed_url.path))
-            if not url_extension or url_extension.lower() not in [ext.lower() for ext in MIME_TO_EXTENSION.values()]:
-                name, ext = os.path.splitext(filename)
-                new_extension = get_file_extension(file_path, response.headers)
-                if not new_extension and not signature_extension:
-                    os.remove(file_path)
-                    error_message = f"No se pudo determinar la extension del archivo: {url}"
-                    print("Omitiendo archivo")
-                    return False, error_message, True
-                if new_extension and not signature_extension and new_extension != '.bin':
-                    new_filename = f"{name}{new_extension}"
-                    new_file_path = os.path.join(download_path, new_filename)
-                    counter = 1
-                    while os.path.exists(new_file_path):
-                        new_filename = f"{name}_{counter}{new_extension}"
-                        new_file_path = os.path.join(download_path, new_filename)
-                        counter += 1
-                    try:
-                        os.rename(file_path, new_file_path)
-                    except OSError as e:
-                        error_message = f"Error al renombrar archivo de {file_path} a {new_file_path}: {str(e)}"
-                        print(error_message)
-                        os.remove(file_path)
-                        return False, error_message, True
-                    file_path = new_file_path
-                    filename = new_filename
-        
         return True, filename, False
             
     except Exception as e:
@@ -310,177 +269,10 @@ def download_file(url, download_path, index, pattern):
         print(error_message)
         return False, error_message, False
 
-# Nueva funcion para parear y descargar frontales y traseras
-def pair_and_download_cards(unique_urls, download_path):
-    print("\nComenzando pareo Frontales con Traseras...")
-    
-    face_urls = []
-    back_urls = []
-    face_seen = set()
-    back_seen = set()
-    for pattern, url in unique_urls:
-        if pattern == 'FaceURL' and url not in face_seen:
-            if 'cloud-3.steamusercontent.com' in url.lower():
-                url_modificada = url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net')
-            else:
-                url_modificada = url
-            face_urls.append(url_modificada)
-            face_seen.add(url_modificada)
-        elif pattern == 'BackURL' and url not in back_seen:
-            if 'cloud-3.steamusercontent.com' in url.lower():
-                url_modificada = url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net')
-            else:
-                url_modificada = url
-            back_urls.append(url_modificada)
-            back_seen.add(url_modificada)
-    
-    print(f"Se descargarán {len(face_urls)} delanteras y {len(back_urls)} traseras")
-    
-    downloaded_urls_bin = set()
-    successful_face_downloads = 0
-    successful_back_downloads = 0
-    failed_face_downloads = 0
-    failed_back_downloads = 0
-    skipped_face_files = 0
-    skipped_back_files = 0
-    
-    for idx in range(max(len(face_urls), len(back_urls))):
-        # Frontal
-        if idx < len(face_urls):
-            url = face_urls[idx]
-            if url not in downloaded_urls_bin:
-                pattern = 'FaceURL'
-                nombre_base = f"{idx+1}_a"
-                try:
-                    parsed_url = urlparse(url)
-                    name, url_extension = os.path.splitext(os.path.basename(parsed_url.path))
-                    
-                    response = verify_and_fetch_url(url)
-                    
-                    content = b''
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            content += chunk
-                            if len(content) >= 1024:
-                                break
-                    
-                    content_type = response.headers.get('content-type', '').lower().split(';')[0]
-                    detected_mime_type, signature_extension = verify_header_signature(content, pattern)
-                    
-                    if url_extension.lower() == '.bin':
-                        if detected_mime_type not in ['image/jpeg', 'image/png', 'image/bmp']:
-                            error_message = f"Extension .bin no permitida para {pattern}, firma no es imagen: {url}"
-                            print(error_message)
-                            skipped_face_files += 1
-                            continue
-                        ext = signature_extension
-                    elif detected_mime_type not in ['image/jpeg', 'image/png', 'image/bmp']:
-                        error_message = f"Firma no valida para {pattern}: {detected_mime_type or 'desconocido'}: {url}"
-                        print(error_message)
-                        skipped_face_files += 1
-                        continue
-                    else:
-                        ext = signature_extension or (mimetypes.guess_extension(content_type) or '')
-                    
-                    if not ext:
-                        error_message = f"No se pudo determinar la extensión del archivo para {pattern}: {url}"
-                        print(error_message)
-                        skipped_face_files += 1
-                        continue
-                    
-                    filename = f"{nombre_base}{ext}"
-                    file_path = os.path.join(download_path, filename)
-                    counter = 1
-                    while os.path.exists(file_path):
-                        filename = f"{nombre_base}_{counter}{ext}"
-                        file_path = os.path.join(download_path, filename)
-                        counter += 1
-                    
-                    with open(file_path, 'wb') as f:
-                        f.write(content)
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                    
-                    print(f"Guardado Frontal: {file_path}")
-                    downloaded_urls_bin.add(url)
-                    successful_face_downloads += 1
-                except Exception as e:
-                    print(f"Error al descargar {nombre_base} desde {url}: {e}")
-                    failed_face_downloads += 1
-                time.sleep(1)  # Retraso para evitar saturar el servidor
-        # Trasera
-        if idx < len(back_urls):
-            url = back_urls[idx]
-            if url not in downloaded_urls_bin:
-                pattern = 'BackURL'
-                nombre_base = f"{idx+1}_b"
-                try:
-                    parsed_url = urlparse(url)
-                    name, url_extension = os.path.splitext(os.path.basename(parsed_url.path))
-                    
-                    response = verify_and_fetch_url(url)
-                    
-                    content = b''
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            content += chunk
-                            if len(content) >= 1024:
-                                break
-                    
-                    content_type = response.headers.get('content-type', '').lower().split(';')[0]
-                    detected_mime_type, signature_extension = verify_header_signature(content, pattern)
-                    
-                    if url_extension.lower() == '.bin':
-                        if detected_mime_type not in ['image/jpeg', 'image/png', 'image/bmp']:
-                            error_message = f"Extension .bin no permitida para {pattern}, firma no es imagen: {url}"
-                            print(error_message)
-                            skipped_back_files += 1
-                            continue
-                        ext = signature_extension
-                    elif detected_mime_type not in ['image/jpeg', 'image/png', 'image/bmp']:
-                        error_message = f"Firma no valida para {pattern}: {detected_mime_type or 'desconocido'}: {url}"
-                        print(error_message)
-                        skipped_back_files += 1
-                        continue
-                    else:
-                        ext = signature_extension or (mimetypes.guess_extension(content_type) or '')
-                    
-                    if not ext:
-                        error_message = f"No se pudo determinar la extensión del archivo para {pattern}: {url}"
-                        print(error_message)
-                        skipped_back_files += 1
-                        continue
-                    
-                    filename = f"{nombre_base}{ext}"
-                    file_path = os.path.join(download_path, filename)
-                    counter = 1
-                    while os.path.exists(file_path):
-                        filename = f"{nombre_base}_{counter}{ext}"
-                        file_path = os.path.join(download_path, filename)
-                        counter += 1
-                    
-                    with open(file_path, 'wb') as f:
-                        f.write(content)
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                    
-                    print(f"Guardado Trasera: {file_path}")
-                    downloaded_urls_bin.add(url)
-                    successful_back_downloads += 1
-                except Exception as e:
-                    print(f"Error al descargar {nombre_base} desde {url}: {e}")
-                    failed_back_downloads += 1
-                time.sleep(1)  # Retraso para evitar saturar el servidor
-    
-    return successful_face_downloads, successful_back_downloads, failed_face_downloads, failed_back_downloads, skipped_face_files, skipped_back_files
-
 # Punto de entrada principal del script
 def main():
-    print("=== Tabletop Simulator URL Descargador ===")
+    print("=== Tabletop Simulator URL Descargador ===\n")
     
-    # Inicializar variables necesarias para el resumen final
     workshop_id = None
     workshop_title = "WorkshopItem"
     converted_urls_count = 0
@@ -492,12 +284,6 @@ def main():
     output_txt_path = None
     output_csv2_path = None
     workshop_binary_path = None
-    successful_face_downloads = 0
-    successful_back_downloads = 0
-    failed_face_downloads = 0
-    failed_back_downloads = 0
-    skipped_face_files = 0
-    skipped_back_files = 0
     
     workshop_url = input("Ingrese la URL del Workshop de Steam: ").strip()
     workshop_id = extract_steam_id(workshop_url)
@@ -505,7 +291,6 @@ def main():
         print("Error: No se pudo extraer un ID valido de la URL proporcionada.")
         return
 
-    # Construir URL de la API y obtener informacion
     api_url = f"https://www.steamworkshopdownloader.cc/json?url=https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
     
     try:
@@ -521,39 +306,30 @@ def main():
             print("Error: No se pudo obtener la URL de descarga desde la API.")
             return
 
-        # Crear un nombre de directorio valido a partir del titulo del workshop
-        safe_folder_name = re.sub(r'[<>:"/\\|?*\s]', '_', data.get("title", "WorkshopItem_Archivos"))
+        safe_folder_name = re.sub(r'[<>:"/\\|?*\s]', '_', workshop_title)
         download_path = os.path.join(os.getcwd(), safe_folder_name)
         workshop_binary_path = os.path.join(download_path, f"{workshop_id}")
 
-        # Eliminar el directorio si ya existe
         if os.path.exists(download_path):
             try:
                 shutil.rmtree(download_path)
                 print(f"Directorio existente '{download_path}' eliminado.")
             except OSError as e:
-                error_message = f"No se pudo eliminar el directorio existente '{download_path}': {str(e)}"
-                print(f"Error: {error_message}")
+                print(f"No se pudo eliminar el directorio existente '{download_path}': {str(e)}")
                 return
 
-        # Crear el directorio de descarga
+        os.makedirs(download_path, exist_ok=True)
         try:
-            os.makedirs(download_path, exist_ok=True)
             os.chmod(download_path, 0o777)
-        except OSError as e:
-            error_message = f"No se pudo crear o modificar permisos del directorio {download_path}: {str(e)}"
-            print(f"Error: {error_message}")
-            return
+        except:
+            pass  # Ignorar error de permisos en algunos sistemas
 
-        # Verificar permisos de escritura en el directorio
         if not os.access(download_path, os.W_OK):
-            error_message = f"No se tienen permisos de escritura en el directorio {download_path}"
-            print(error_message)
+            print(f"No se tienen permisos de escritura en el directorio {download_path}")
             return
 
         print(f"Los archivos se guardaran en: {download_path}")
         
-        # Descargar el archivo principal
         print(f"Descargando archivo principal de '{workshop_title}'...")
         workshop_response = requests.get(download_url, timeout=60)
         workshop_response.raise_for_status()
@@ -561,23 +337,20 @@ def main():
         with open(workshop_binary_path, 'wb') as f:
             f.write(workshop_response.content)
 
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print(f"Error al contactar la API o descargar el archivo principal: {e}")
         return
-    except json.JSONDecodeError:
-        print("Error: La respuesta de la API no es un JSON valido.")
-        return
     
-    # Extraer URLs directamente del archivo binario
+    # Extraer URLs del archivo binario
     try:
         with open(workshop_binary_path, 'rb') as file:
             content = file.read()
         try:
             text = content.decode('utf-8', errors='ignore')
         except UnicodeDecodeError as e:
-            error_message = f"Error al decodificar el archivo {workshop_binary_path}: {str(e)}"
-            print(f"Error: {error_message}")
+            print(f"Error al decodificar el archivo {workshop_binary_path}: {str(e)}")
             return
+
         url_patterns = [
             (r'FaceURL\x00.*?(http[^\x00]+)\x00', 'FaceURL'),
             (r'BackURL\x00.*?(http[^\x00]+)\x00', 'BackURL'),
@@ -589,10 +362,11 @@ def main():
             (r'AssetbundleSecondaryURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleSecondaryURL'),
             (r'DiffuseURL\x00.*?(http[^\x00]+)\x00', 'DiffuseURL')
         ]
+
         seen_urls = set()
         unique_urls = []
-        for pattern, url_type in url_patterns:
-            matches = re.finditer(pattern, text, re.DOTALL)
+        for pattern_regex, url_type in url_patterns:
+            matches = re.finditer(pattern_regex, text, re.DOTALL)
             for match in matches:
                 url = match.group(1).strip()
                 cleaned_url = clean_url(url)
@@ -603,31 +377,32 @@ def main():
                     if cleaned_url not in seen_urls:
                         seen_urls.add(cleaned_url)
                         unique_urls.append((url_type, cleaned_url))
+        
         converted_urls_count = len(unique_urls)
         if not unique_urls:
-            error_message = "No se encontraron URLs validas"
-            print(error_message)
+            print("No se encontraron URLs validas")
             return
+
     except FileNotFoundError:
-        error_message = f"El archivo {workshop_binary_path} no se encuentra."
-        print(f"Error: {error_message}")
+        print(f"El archivo {workshop_binary_path} no se encuentra.")
         return
+
     output_csv2 = f"{workshop_id}_replaced.csv"
     output_csv2_path, replacements_made = replace_urls_in_csv(unique_urls, output_csv2, download_path)
     if not output_csv2_path:
-        error_message = "Error en el reemplazo de URLs. Proceso terminado."
-        print(error_message)
+        print("Error en el reemplazo de URLs. Proceso terminado.")
         return
+
     try:
-        # Leer el archivo CSV para descargar los archivos
         with open(output_csv2_path, 'r', encoding='utf-8-sig') as input_file:
             reader_csv = csv.reader(input_file)
             urls = list(reader_csv)
+
         if not urls:
-            error_message = "El archivo CSV con URLs para descargar esta vacio."
-            print(error_message)
+            print("El archivo CSV con URLs para descargar esta vacio.")
             return
-        # Crear archivo TXT con solo las URLs
+
+        # Generar TXT con solo las URLs
         output_txt = f"{workshop_id}_replaced.txt"
         output_txt_path = os.path.join(download_path, output_txt)
         try:
@@ -640,18 +415,17 @@ def main():
                 else:
                     txt_file.write("No se encontraron URLs validas en el CSV")
         except Exception as e:
-            error_message = f"Error al generar el archivo TXT {output_txt_path}: {str(e)}"
-            print(f"Error: {error_message}")
+            print(f"Error al generar el archivo TXT: {str(e)}")
+
+        print("\nDescargando archivos individuales...\n")
         for index, row in enumerate(urls, start=1):
             if len(row) < 2:
-                error_message = f"Fila invalida en el CSV (menos de 2 columnas): {row}"
-                print(error_message)
+                print(f"Fila invalida en el CSV: {row}")
                 continue
             pattern, url = row[0], row[1]
             if not url:
-                error_message = f"URL vacia para el patron {pattern}"
-                print(error_message)
                 continue
+                
             success, result, skipped = download_file(url, download_path, index, pattern)
             if success:
                 successful_downloads += 1
@@ -660,74 +434,46 @@ def main():
                 skipped_files += 1
             else:
                 failed_downloads += 1
-            time.sleep(1) # Pausa de 1 segundo para no saturar el servidor
-        # Si no hubo descargas exitosas, eliminar archivos TXT y CSV
+                
+            time.sleep(1)  # Pausa anti-ban
+
         if successful_downloads == 0:
             for file_path in [output_txt_path, output_csv2_path]:
                 if os.path.exists(file_path):
                     try:
                         os.remove(file_path)
-                        print(f"Archivo '{file_path}' eliminado debido a que no hubo descargas exitosas.")
-                    except OSError as e:
-                        print(f"No se pudo eliminar el archivo '{file_path}': {e}")
-        
-        # Preguntar al usuario si desea iniciar el modo pareo de frontales con traseras
-        while True:
-            pair_mode = input("\n¿Desea iniciar el modo pareo de frontales con traseras? (s/n): ").strip().lower()
-            if pair_mode in ['s', 'n']:
-                pair_mode = pair_mode == 's'
-                break
-            print("Por favor, ingrese 's' para sí o 'n' para no.")
+                        print(f"Archivo '{os.path.basename(file_path)}' eliminado (sin descargas exitosas)")
+                    except:
+                        pass
 
     except Exception as e:
-        error_message = f"Error inesperado en la fase de descarga de archivos: {str(e)}"
-        print(f"Error: {error_message}")
+        print(f"Error inesperado en la fase de descarga: {str(e)}")
+    
     finally:
-        # Limpiar el archivo binario descargado
+        # Limpieza del binario temporal
         if workshop_binary_path and os.path.exists(workshop_binary_path):
             try:
                 os.remove(workshop_binary_path)
-            except OSError as e:
-                print(f"No se pudo eliminar el archivo temporal '{workshop_binary_path}': {e}")
+            except:
+                pass
 
-        # Llamar a la funcion para parear y descargar frontales y traseras solo si el usuario lo seleccionó
-        if pair_mode:
-            successful_face_downloads, successful_back_downloads, failed_face_downloads, failed_back_downloads, skipped_face_files, skipped_back_files = pair_and_download_cards(unique_urls, download_path)
-        
-        # Imprimir resumen final
-        print("\n=== Resumen Final ===")
-        print(f"Workshop ID procesado: {workshop_id or 'No disponible'}")
-        print(f"Nombre Mod TTS: {workshop_title}")
-        print(f"URLs extraidas: {converted_urls_count}")
-        print(f"Reemplazos realizados: {replacements_made}")
-        print(f"URLs procesadas para descarga: {len(urls)}")
-        print(f"Archivos descargados exitosamente: {successful_downloads}")
-        print(f"Archivos que fallaron: {failed_downloads}")
-        print(f"Archivos omitidos (extensiones invalidas): {skipped_files}")
-        if pair_mode:
-            print(f"Se parearon exitosamente {successful_face_downloads} frontales con {successful_back_downloads} traseras")
-            if failed_face_downloads > 0:
-                print(f"Fallaron en la descarga {failed_face_downloads} frontales")
-            if failed_back_downloads > 0: 
-                print(f"Fallaron en la descarga {failed_back_downloads} traseras")
-            if skipped_face_files > 0:
-                print(f"Archivos frontales omitidos (extensiones inválidas): {skipped_face_files}")
-            if skipped_back_files > 0:
-                print(f"Archivos traseros omitidos (extensiones inválidas): {skipped_back_files}")
-        else:
-            print("Modo pareo de frontales y traseras no activado.")
-        
+        # Resumen final (sin referencias al pareo)
+        print("\n" + "="*50)
+        print("           RESUMEN FINAL")
+        print("="*50)
+        print(f"Workshop ID:          {workshop_id or '—'}")
+        print(f"Nombre del mod:       {workshop_title}")
+        print(f"URLs extraídas:       {converted_urls_count}")
+        print(f"Reemplazos realizados:{replacements_made}")
+        print(f"Archivos procesados:  {len(urls)}")
+        print(f"Descargas exitosas:   {successful_downloads}")
+        print(f"Fallidas:             {failed_downloads}")
+        print(f"Omitidas (inválidas): {skipped_files}")
+        print("-"*50)
         if successful_downloads > 0:
-            print(f"\nArchivo TXT de URLs reemplazadas: {output_txt_path or 'No generado'}")
-            print(f"Archivo CSV de URLs reemplazadas: {output_csv2_path or 'No generado'}")
-
-        # Eliminar duplicados de la lista general de descarga
-        urls_no_duplicadas = []
-        url_set_general = set()
-        for pattern, url in unique_urls:
-            if url not in url_set_general:
-                urls_no_duplicadas.append((pattern, url))
-                url_set_general.add(url)
+            print(f"Archivo TXT: {output_txt_path or '—'}")
+            print(f"Archivo CSV: {output_csv2_path or '—'}")
+        print("="*50)
 
 if __name__ == "__main__":
     main()
