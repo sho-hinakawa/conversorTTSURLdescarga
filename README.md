@@ -16,7 +16,6 @@ Este script en Python permite descargan los archivos de un mod del Workshop de T
 - Simula un navegador para los sitios de hosting de imagenes y reintenta la descarga de archivos si esta falla
 - Guarda automaticamente patron,url en un archivo CSV
 - Guarda automaticamente las URLs reemplazadas en un archivo TXT
-- Parea las imagenes Frontales y Traseras de acuerdo al archivo TTS
 - Verifica que la libreria request este instalada al ejecutar el script
 
 
