@@ -1,3 +1,1 @@
 python convierteTTS_descargaURL.py
-pause
-
