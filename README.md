@@ -15,8 +15,9 @@ Este script en Python permite descargan los archivos de un mod del Workshop de T
 - Identifica la extension del archivo identificando la cabecera leyendo los primeros 4096 bytes del archivo y comparandolos con archivos conocidos de TTS
 - Simula un navegador para los sitios de hosting de imagenes y reintenta la descarga de archivos si esta falla
 - Guarda automaticamente patron,url en un archivo CSV
-- Guarda automaticamente las URLs reemplazadas en un archivo TXT
+- Descarga archivos validos de TTS como imagenes,pdf y modelos 3d, omite el resto
 - Verifica que la libreria request este instalada al ejecutar el script
+
 
 
 ## Requisitos
