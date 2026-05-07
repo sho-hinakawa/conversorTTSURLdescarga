@@ -175,20 +175,19 @@ def verify_header_signature(content, pattern):
         print(f"Error al verificar firma de cabecera: {str(e)}")
         return None, None
 
-# === NUEVA FUNCIÓN AUXILIAR ===
+# Verifica si el archivo tiene una extensión válida
 def has_valid_extension(filename):
-    """Verifica si el archivo tiene una extensión válida"""
     if not filename:
         return False
     name, ext = os.path.splitext(filename)
     if not ext:
         return False
     # Extensiones válidas comunes
-    valid_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.obj', '.pdf', '.zip', '.unity3d', '.bin'}
+    valid_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.obj', '.pdf'}
     return ext.lower() in valid_exts
 
 
-# === FUNCIÓN download_file() MODIFICADA ===
+# Descarga de archivos
 def download_file(url, download_path, index, pattern):
     try:
         if not url.startswith(('http://', 'https://')):
@@ -216,7 +215,7 @@ def download_file(url, download_path, index, pattern):
         content_type = response.headers.get('content-type', '').lower().split(';')[0]
         detected_mime_type, signature_extension = verify_header_signature(content, pattern)
 
-        # ==================== CONSTRUCCIÓN DEL NOMBRE ====================
+        # Construccion del nombre del archivo 
         if pattern:
             if pattern == 'MeshURL':
                 filename = f"{pattern}_{index}.obj"
@@ -250,13 +249,13 @@ def download_file(url, download_path, index, pattern):
                 else:
                     filename = f"{name}_{index}"
 
-        # === VALIDACIÓN FINAL ANTES DE DESCARGAR ===
+        # Validacion antes de descragar, omite archivos sin extensiones utiles
         if not has_valid_extension(filename):
             error_message = f"Archivo omitido: no se pudo determinar extensión para {pattern or 'desconocido'} → {url}"
             print(error_message)
             return False, error_message, True  # skipped = True
 
-        # ====================== DESCARGA ======================
+        # Descarga
         file_path = os.path.join(download_path, filename)
         counter = 1
         while os.path.exists(file_path):
@@ -368,7 +367,6 @@ def main():
             (r'PDFUrl\x00.*?(http[^\x00]+)\x00', 'PDFUrl'),
             (r'ImageURL\x00.*?(http[^\x00]+)\x00', 'ImageURL'),
             (r'ImageSecondaryURL\x00.*?(http[^\x00]+)\x00', 'ImageSecondaryURL'),
-            #(r'AssetbundleURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleURL'),
             (r'AssetbundleSecondaryURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleSecondaryURL'),
             (r'DiffuseURL\x00.*?(http[^\x00]+)\x00', 'DiffuseURL')
         ]
@@ -412,7 +410,7 @@ def main():
             print("El archivo CSV con URLs para descargar esta vacio.")
             return
 
-        print("\nDescargando archivos individuales...\n")
+        print("\nDescargando archivos...\n")
         for index, row in enumerate(urls, start=1):
             if len(row) < 2:
                 print(f"Fila invalida en el CSV: {row}")
@@ -452,7 +450,7 @@ def main():
             except:
                 pass
 
-        # Resumen final (sin referencias al pareo)
+        # Resumen final 
         print("\n" + "="*50)
         print("           RESUMEN FINAL")
         print("="*50)
@@ -465,8 +463,7 @@ def main():
         print(f"Fallidas:             {failed_downloads}")
         print(f"Omitidas (inválidas): {skipped_files}")
         print("-"*50)
-        if successful_downloads > 0:
-            print(f"Archivo CSV: {output_csv2_path or '—'}")
+        print(f"Archivo CSV: {output_csv2_path or '—'}")
         print("="*50)
 
 if __name__ == "__main__":
