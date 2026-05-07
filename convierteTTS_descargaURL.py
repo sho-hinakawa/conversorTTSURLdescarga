@@ -175,7 +175,20 @@ def verify_header_signature(content, pattern):
         print(f"Error al verificar firma de cabecera: {str(e)}")
         return None, None
 
-# Descarga un archivo desde una URL y lo guarda en el directorio especificado
+# === NUEVA FUNCIÓN AUXILIAR ===
+def has_valid_extension(filename):
+    """Verifica si el archivo tiene una extensión válida"""
+    if not filename:
+        return False
+    name, ext = os.path.splitext(filename)
+    if not ext:
+        return False
+    # Extensiones válidas comunes
+    valid_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.obj', '.pdf', '.zip', '.unity3d', '.bin'}
+    return ext.lower() in valid_exts
+
+
+# === FUNCIÓN download_file() MODIFICADA ===
 def download_file(url, download_path, index, pattern):
     try:
         if not url.startswith(('http://', 'https://')):
@@ -186,67 +199,64 @@ def download_file(url, download_path, index, pattern):
         parsed_url = urlparse(url)
         filename = os.path.basename(parsed_url.path)
         name, url_extension = os.path.splitext(os.path.basename(parsed_url.path))
-        
+
         try:
             response = verify_and_fetch_url(url)
         except requests.exceptions.RequestException as e:
             return False, str(e), False
-        
+
+        # Leer cabecera para detección
         content = b''
         for chunk in response.iter_content(chunk_size=8192):
             if chunk:
                 content += chunk
                 if len(content) >= 1024:
                     break
-        
+
         content_type = response.headers.get('content-type', '').lower().split(';')[0]
-        
         detected_mime_type, signature_extension = verify_header_signature(content, pattern)
-        
-        # Validaciones específicas por tipo
-        if pattern in ['FaceURL', 'BackURL']:
-            if url_extension.lower() == '.bin':
-                if detected_mime_type not in ['image/jpeg', 'image/png', 'image/bmp']:
-                    error_message = f"Extension .bin no permitida para {pattern}, firma no es imagen: {url}"
-                    print(error_message)
-                    return False, error_message, False
-                url_extension = signature_extension
-            elif detected_mime_type not in ['image/jpeg', 'image/png', 'image/bmp']:
-                error_message = f"Firma no valida para {pattern}: {detected_mime_type or 'desconocido'}: {url}"
-                print(error_message)
-                return False, error_message, False
-        
+
+        # ==================== CONSTRUCCIÓN DEL NOMBRE ====================
         if pattern:
             if pattern == 'MeshURL':
-                if detected_mime_type != 'model/obj' and content_type not in ['model/obj', 'text/plain', 'application/octet-stream']:
-                    error_message = f"Firma o tipo MIME no valido para MeshURL: {detected_mime_type or content_type}: {url}"
-                    print(error_message)
-                    return False, error_message, False
                 filename = f"{pattern}_{index}.obj"
             elif pattern == 'PDFUrl':
-                if detected_mime_type != 'application/pdf' and content_type not in ['application/pdf']:
-                    error_message = f"Firma o tipo MIME no valido para PDFUrl: {detected_mime_type or content_type}: {url}"
-                    print(error_message)
-                    return False, error_message, False
                 filename = f"{pattern}_{index}.pdf"
-            elif pattern in ['FaceURL', 'BackURL']:
-                filename = f"{pattern}_{index}{signature_extension or url_extension}"
+            elif pattern in ['FaceURL', 'BackURL', 'ImageURL', 'ImageSecondaryURL']:
+                ext = signature_extension or url_extension
+                filename = f"{pattern}_{index}{ext}"
             else:
+                # Patrones como DiffuseURL, AssetbundleSecondaryURL, etc.
                 filename = f"{pattern}_{index}"
                 if detected_mime_type and signature_extension:
                     filename = f"{pattern}_{index}{signature_extension}"
+                elif url_extension:
+                    filename = f"{pattern}_{index}{url_extension}"
+                # NUEVA LÓGICA: Si aún no tiene extensión → NO DESCARGAR
+                else:
+                    error_message = f"Archivo omitido: sin extensión detectada para {pattern} → {url}"
+                    print(error_message)
+                    return False, error_message, True  # skipped = True
         else:
+            # Caso sin pattern
             if not filename or len(filename) > 100:
                 filename = f"file_{index}"
             else:
                 name, ext = os.path.splitext(filename)
                 if detected_mime_type and signature_extension:
                     filename = f"{name}_{index}{signature_extension}"
-                elif not ext:
-                    filename = f"{name}_{index}"
-                else:
+                elif ext:
                     filename = f"{name}_{index}{ext}"
-        
+                else:
+                    filename = f"{name}_{index}"
+
+        # === VALIDACIÓN FINAL ANTES DE DESCARGAR ===
+        if not has_valid_extension(filename):
+            error_message = f"Archivo omitido: no se pudo determinar extensión para {pattern or 'desconocido'} → {url}"
+            print(error_message)
+            return False, error_message, True  # skipped = True
+
+        # ====================== DESCARGA ======================
         file_path = os.path.join(download_path, filename)
         counter = 1
         while os.path.exists(file_path):
@@ -255,20 +265,20 @@ def download_file(url, download_path, index, pattern):
             filename = f"{name}_{index}_{counter}{ext}"
             file_path = os.path.join(download_path, filename)
             counter += 1
-        
+
         with open(file_path, 'wb') as f:
             f.write(content)
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
-        
+
         return True, filename, False
             
     except Exception as e:
         error_message = f"Error al descargar {url}: {str(e)}"
         print(error_message)
         return False, error_message, False
-
+        
 # Punto de entrada principal del script
 def main():
     print("=== Tabletop Simulator URL Descargador ===\n")
@@ -358,7 +368,7 @@ def main():
             (r'PDFUrl\x00.*?(http[^\x00]+)\x00', 'PDFUrl'),
             (r'ImageURL\x00.*?(http[^\x00]+)\x00', 'ImageURL'),
             (r'ImageSecondaryURL\x00.*?(http[^\x00]+)\x00', 'ImageSecondaryURL'),
-            (r'AssetbundleURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleURL'),
+            #(r'AssetbundleURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleURL'),
             (r'AssetbundleSecondaryURL\x00.*?(http[^\x00]+)\x00', 'AssetbundleSecondaryURL'),
             (r'DiffuseURL\x00.*?(http[^\x00]+)\x00', 'DiffuseURL')
         ]
@@ -401,21 +411,6 @@ def main():
         if not urls:
             print("El archivo CSV con URLs para descargar esta vacio.")
             return
-
-        # Generar TXT con solo las URLs
-        output_txt = f"{workshop_id}_replaced.txt"
-        output_txt_path = os.path.join(download_path, output_txt)
-        try:
-            with open(output_csv2_path, 'r', encoding='utf-8-sig') as csv_file:
-                reader_csv = csv.reader(csv_file)
-                urls_for_txt = [row[1] for row in reader_csv if len(row) >= 2 and row[1]]
-            with open(output_txt_path, 'w', encoding='utf-8', newline='') as txt_file:
-                if urls_for_txt:
-                    txt_file.write('\n'.join(urls_for_txt))
-                else:
-                    txt_file.write("No se encontraron URLs validas en el CSV")
-        except Exception as e:
-            print(f"Error al generar el archivo TXT: {str(e)}")
 
         print("\nDescargando archivos individuales...\n")
         for index, row in enumerate(urls, start=1):
@@ -471,7 +466,6 @@ def main():
         print(f"Omitidas (inválidas): {skipped_files}")
         print("-"*50)
         if successful_downloads > 0:
-            print(f"Archivo TXT: {output_txt_path or '—'}")
             print(f"Archivo CSV: {output_csv2_path or '—'}")
         print("="*50)
 
