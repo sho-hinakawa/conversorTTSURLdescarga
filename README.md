@@ -2,7 +2,7 @@
 
 Este script en Python permite descargan los archivos de un mod del Workshop de Tabletop Simulator dada la URL del Workshop un directorio dado por el nombre del mod
 
-**Creditos** Telegram @hinakawa y @alemarfar
+**Creditos** Telegram @Gandalf775 @hinakawa @alemarfar
 
 ## Caracteristicas
 - Lee el ID desde el Workshop de TTS especificado por el usuario
