@@ -129,10 +129,10 @@ def download_file(url, download_path, field_name, counter, total):
             final_ext = ".obj"
         elif "pdfurl" in field_lower:
             final_ext = ".pdf"
-        elif field_lower in ["faceurl", "backurl", "imageurl", "imagesecondaryurl"]:
+        elif field_lower in ["faceurl", "backurl", "imageurl"]:
             final_ext = url_ext if url_ext in {'.jpg','.jpeg','.png','.bmp','.webp'} else (signature_ext or ".png")
         else:
-            if url_ext in {'.jpg','.jpeg','.png','.bmp','.webp','.obj','.pdf'}:
+            if url_ext in {'.jpg','.jpeg','.png','.bmp','.webp'}:
                 final_ext = url_ext
             else:
                 final_ext = signature_ext or ".bin"
@@ -194,13 +194,11 @@ def main():
 
         print(f"Guardando archivos en: {download_path}\n")
 
-        print("Descargando archivo .bin del workshop...")
         workshop_response = get_with_retries(download_url)
         bin_path = os.path.join(download_path, f"{workshop_id}.bin")
         with open(bin_path, 'wb') as f:
             f.write(workshop_response.content)
-        print("Archivo .bin descargado.")
-
+        
     except Exception as e:
         print(f"Error al descargar workshop: {e}")
         return
@@ -235,7 +233,7 @@ def main():
 
     print(f"Se encontraron {len(to_download)} URL válidas para descargar.")
     if omitted > 0:
-        print(f"Omitidas: {omitted} (AssetBundle/PageURL)")
+        print(f"Omitidas: {omitted} (AssetBundleURL/PageURL)")
 
     # ==================== DESCARGAS ====================
     print("\nIniciando descargas...\n")
