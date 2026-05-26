@@ -8,7 +8,7 @@ import re
 import os
 import csv
 import time
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 
 # ====================== FUNCIONES BASICAS ======================
@@ -25,8 +25,7 @@ def check_write_permissions():
         print("No tienes permisos de escritura en el directorio actual:")
         print(f"   {current_dir}")
         return False
-    except Exception as e:
-        print(f"Advertencia al verificar permisos de escritura: {e}")
+    except Exception:
         return True
 
 
@@ -47,72 +46,35 @@ def extract_steam_id(url):
     return match.group(1) if match else None
 
 
-def get_with_retries(url, headers=None, retries=3, initial_delay=1):
+def get_with_retries(url, session, headers=None, retries=5, initial_delay=0.8):
     if headers is None:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     
     delay = initial_delay
     for attempt in range(retries):
         try:
-            response = requests.get(url, stream=True, allow_redirects=True, timeout=15, headers=headers)
+            response = session.get(url, stream=True, allow_redirects=True, timeout=25, headers=headers)
+            
             if response.status_code == 200:
                 return response
+            elif response.status_code == 404:
+                print(f"   404 No encontrado: {url}")
+                return None
             elif response.status_code == 429:
-                if attempt == retries - 1:
-                    raise requests.exceptions.RequestException(f"Codigo HTTP {response.status_code}")
-                print(f"Aviso: Demasiadas peticiones. Esperando {delay} segundos...")
+                print(f"   Demasiadas peticiones (429). Esperando {delay}s...")
                 time.sleep(delay)
-                delay *= 2
+                delay *= 1.4
                 continue
-            elif response.status_code == 403:
-                print(f"Error 403 en {url}.")
-                if attempt < retries - 1:
-                    headers.pop('Referer', None)
-                    time.sleep(delay)
-                    continue
-                raise
             else:
-                raise requests.exceptions.RequestException(f"Codigo HTTP {response.status_code}")
+                print(f"   HTTP {response.status_code} en {url}")
+                
         except Exception as e:
-            if attempt == retries - 1:
-                raise
-            print(f"Error en intento {attempt+1}/{retries}: {str(e)}. Reintentando...")
+            print(f"   Error en intento {attempt+1}: {str(e)[:60]}")
+        
+        if attempt < retries - 1:
             time.sleep(delay)
-   
-    raise requests.exceptions.RequestException(f"No se pudo obtener la URL despues de {retries} intentos.")
-
-
-def get_file_type_from_headers(response):
-    content_type = response.headers.get('Content-Type', '').lower()
-    if 'pdf' in content_type: return '.pdf'
-    elif 'image/jpeg' in content_type or 'image/jpg' in content_type: return '.jpg'
-    elif 'image/png' in content_type: return '.png'
-    elif 'image/gif' in content_type: return '.gif'
-    elif 'image/webp' in content_type: return '.webp'
-    return None
-
-
-def verify_header_signature(content):
-    if len(content) < 8:
-        return None
-
-    if content.startswith(b'\xFF\xD8\xFF'): return '.jpg'
-    if content.startswith(b'\x89PNG\r\n\x1a\n'): return '.png'
-    if content.startswith(b'GIF87a') or content.startswith(b'GIF89a'): return '.gif'
-    if content.startswith(b'RIFF') and content[8:12] == b'WEBP': return '.webp'
-    if content.startswith(b'BM'): return '.bmp'
-    if content.startswith(b'%PDF'): return '.pdf'
-    if content.startswith(b'PK\x03\x04'): return '.zip'
-
-    try:
-        text = content[:512].decode('ascii', errors='ignore').lstrip()
-        if text:
-            first_line = text.splitlines()[0]
-            if (first_line.startswith('#') or first_line.startswith('v ') or 
-                first_line.startswith('f ') or 'mtllib' in text[:200] or 'o ' in text[:100]):
-                return '.obj'
-    except:
-        pass
+            delay *= 1.4
+    
     return None
 
 
@@ -123,66 +85,79 @@ def get_clean_field_name(field_name):
 
 
 def clean_steam_url(url):
+    url = url.strip()
     if 'cloud-3.steamusercontent.com' in url.lower():
         return url.replace('http://cloud-3.steamusercontent.com', 'https://steamusercontent-a.akamaihd.net')
+    if url.startswith('http://steamusercontent'):
+        return url.replace('http://', 'https://')
     return url
 
 
-# ====================== FUNCION DESCARGA ======================
-def download_file(url, download_path, field_name, counter, total):
-    try:
-        parsed = urlparse(url)
-        url_ext = os.path.splitext(parsed.path)[1].lower()
+def get_url_extension(url):
+    if not url:
+        return ""
+    url = unquote(url)
+    parsed = urlparse(url)
+    path = parsed.path
+    if '?' in path:
+        path = path.split('?')[0]
+    ext = os.path.splitext(path)[1].lower()
+    return ext
 
-        response = get_with_retries(url)
-        header_ext = get_file_type_from_headers(response)
+
+# ====================== DESCARGA ======================
+def download_file(url, download_path, field_name, counter, total, csv_writer, csv_file, session):
+    try:
+        url_ext = get_url_extension(url)
+        clean_field = get_clean_field_name(field_name)
+
+        valid_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp', '.pdf', '.obj'}
+
+        if url_ext and url_ext not in valid_extensions and url_ext != ".bin":
+            print(f"{counter:3d}/{total} | {clean_field:<20} -> {url_ext} (omitiendo)")
+            csv_writer.writerow([clean_field, url, f"OMITIDO ({url_ext})"])
+            csv_file.flush()
+            return "invalid", clean_field
+
+        response = get_with_retries(url, session)
+        if response is None:
+            csv_writer.writerow([clean_field, url, "ERROR (descarga fallida)"])
+            csv_file.flush()
+            return "failed", clean_field
 
         content = b''
-        for chunk in response.iter_content(chunk_size=8192):
+        for chunk in response.iter_content(chunk_size=16384):
             content += chunk
             if len(content) >= 1024:
                 break
 
-        signature_ext = verify_header_signature(content)
+        signature_ext = None
+        if content.startswith(b'\xFF\xD8\xFF'): signature_ext = '.jpg'
+        elif content.startswith(b'\x89PNG\r\n\x1a\n'): signature_ext = '.png'
+        elif content.startswith(b'%PDF'): signature_ext = '.pdf'
+        elif content.startswith(b'BM'): signature_ext = '.bmp'
 
-        clean_field = get_clean_field_name(field_name)
         field_lower = clean_field.lower()
 
-        final_ext = None
-        final_field_name = clean_field
-
-        if "meshurl" in field_lower:
+        if signature_ext == '.obj' or url_ext == '.obj' or "meshurl" in field_lower:
             final_ext = ".obj"
-        elif "pdfurl" in field_lower or header_ext == '.pdf' or signature_ext == '.pdf':
+            final_field = "MeshURL"
+        elif signature_ext == '.pdf' or url_ext == '.pdf' or "pdfurl" in field_lower:
             final_ext = ".pdf"
-            final_field_name = "PDFURL"
-        elif field_lower in ["faceurl", "backurl", "imageurl"]:
-            if header_ext in {'.jpg','.jpeg','.png','.gif','.webp','.bmp'}:
-                final_ext = header_ext
-            elif signature_ext in {'.jpg','.png','.gif','.webp','.bmp'}:
-                final_ext = signature_ext
-            elif signature_ext == '.obj':
-                final_ext = '.obj'
-                final_field_name = "MeshURL"
-            else:
-                final_ext = url_ext if url_ext in {'.jpg','.jpeg','.png','.gif','.webp','.bmp'} else signature_ext
+            final_field = "PDFURL"
         else:
-            if header_ext == '.pdf' or signature_ext == '.pdf':
-                final_ext = '.pdf'
-                final_field_name = "PDFURL"
-            elif signature_ext == '.obj':
-                final_ext = '.obj'
-                final_field_name = "MeshURL"
-            else:
-                final_ext = header_ext or signature_ext or url_ext
+            final_ext = signature_ext or url_ext
+            final_field = clean_field
 
-        allowed_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp', '.pdf', '.obj'}
-        if not final_ext or final_ext not in allowed_exts:
-            return False, None, clean_field
+        if not final_ext or final_ext not in valid_extensions:
+            print(f"{counter:3d}/{total} | {clean_field:<20} -> Extension invalida (omitiendo)")
+            csv_writer.writerow([clean_field, url, "INVALIDA"])
+            csv_file.flush()
+            return "invalid", clean_field
 
-        filename = f"{final_field_name}_{counter}{final_ext}"
-
+        filename = f"{final_field}_{counter}{final_ext}"
         file_path = os.path.join(download_path, filename)
+
         c = 1
         while os.path.exists(file_path):
             name, ext = os.path.splitext(filename)
@@ -192,152 +167,162 @@ def download_file(url, download_path, field_name, counter, total):
 
         with open(file_path, 'wb') as f:
             f.write(content)
-            for chunk in response.iter_content(chunk_size=8192):
+            for chunk in response.iter_content(chunk_size=16384):
                 if chunk:
                     f.write(chunk)
 
-        print(f"{counter:3d}/{total} | {final_field_name:<20} -> {filename}")
-        return True, filename, final_field_name
+        print(f"{counter:3d}/{total} | {final_field:<20} -> {filename}")
+        csv_writer.writerow([final_field, url, filename])
+        csv_file.flush()
+        return "success", final_field
 
     except Exception as e:
-        status_code = "ERROR"
-        if hasattr(e, 'response') and e.response:
-            status_code = str(e.response.status_code)
-        elif "HTTP" in str(e):
-            status_code = str(e).split()[-1]
-        
-        print(f"{counter:3d}/{total} | {field_name} -> {status_code} | URL: {url}")
-        return False, None, field_name
+        print(f"{counter:3d}/{total} | {field_name:<20} -> Error: {str(e)[:70]}")
+        csv_writer.writerow([field_name, url, f"ERROR: {str(e)[:70]}"])
+        csv_file.flush()
+        return "failed", field_name
+
+
+# ====================== OBTENER WORKSHOP ======================
+def get_workshop_data(workshop_id):
+    # Prioridad a GET simples
+    alternatives = [
+        f"https://www.steamworkshopdownloader.cc/json?url=https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}",
+        f"https://steamworkshopdownloader.net/json?url=https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}",
+        f"https://steamworkshopdownloader.top/json?url=https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}",
+    ]
+
+    for api_url in alternatives:
+        print(f"Intentando GET: {api_url.split('/')[2]}...")
+        try:
+            response = requests.get(api_url, timeout=25)
+            if response.status_code == 200:
+                data = response.json()
+                title = data.get("title", "WorkshopItem")
+                download_url = data.get("download_url")
+                if download_url:
+                    print(f"Exito con {api_url.split('/')[2]}")
+                    return title, download_url
+        except Exception as e:
+            print(f"   Fallo: {str(e)[:80]}")
+            continue
+
+    return None, None
 
 
 # ====================== MAIN ======================
 def main():
     print("=== Tabletop Simulator URL Descargador ===\n")
     
-    workshop_id = None
-    workshop_title = "Desconocido"
-
     if not check_write_permissions():
         input("\nPresiona Enter para salir...")
         return
 
     workshop_url = input("Ingrese la URL del Workshop de Steam: ").strip()
-
-    if not workshop_url.startswith("https://steamcommunity.com/sharedfiles/filedetails"):
-        print("ERROR: La URL debe comenzar con:")
-        print("   https://steamcommunity.com/sharedfiles/filedetails")
-        input("\nPresiona Enter para salir...")
-        return
-
     workshop_id = extract_steam_id(workshop_url)
-    
     if not workshop_id:
-        print("Error: No se pudo extraer un ID valido de la URL.")
+        print("Error: No se pudo extraer el ID del workshop.")
         input("\nPresiona Enter para salir...")
         return
 
-    api_url = f"https://www.steamworkshopdownloader.cc/json?url=https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
-    
+    print("Procesando Workshop")
+    print(f"ID: {workshop_id}\n")
+
+    workshop_title, download_url = get_workshop_data(workshop_id)
+
+    if not download_url:
+        print("\nError: Ningun downloader GET funciono.")
+        print("Prueba mas tarde o revisa tu conexion.")
+        input("\nPresiona Enter para salir...")
+        return
+
+    print(f"Titulo: {workshop_title}\n")
+
+    safe_folder_name = re.sub(r'[<>:"/\\|?*\s]', '_', workshop_title)
+    base_path = os.path.join(os.getcwd(), safe_folder_name)
+    download_path = get_unique_folder_name(base_path)
+
+    os.makedirs(download_path, exist_ok=True)
+    print(f"Guardando en: {download_path}\n")
+
     try:
-        response = requests.get(api_url, timeout=30)
-        data = response.json()
-        workshop_title = data.get("title", "WorkshopItem")
-        download_url = data.get("download_url")
-
-        print(f"Obteniendo informacion del Workshop: {workshop_id} titulo: {workshop_title}...")
-        
-        safe_folder_name = re.sub(r'[<>:"/\\|?*\s]', '_', workshop_title)
-        base_path = os.path.join(os.getcwd(), safe_folder_name)
-        download_path = get_unique_folder_name(base_path)
-
-        os.makedirs(download_path, exist_ok=True)
-
-        print(f"Guardando archivos en: {download_path}\n")
-
-        workshop_response = get_with_retries(download_url)
+        workshop_response = requests.get(download_url, timeout=60)
         bin_path = os.path.join(download_path, f"{workshop_id}.bin")
         with open(bin_path, 'wb') as f:
             f.write(workshop_response.content)
-        
     except Exception as e:
-        print(f"Error al obtener informacion del workshop: {e}")
+        print(f"Error al descargar el .bin: {e}")
         input("\nPresiona Enter para salir...")
         return
 
-    # ==================== BUSQUEDA DE URLS ====================
-    print("Buscando URLs dentro del archivo...")
-    try:
-        with open(bin_path, 'rb') as f:
-            text = f.read().decode('utf-8', errors='ignore')
+    print("Buscando todas las URLs en el archivo...")
+    with open(bin_path, 'rb') as f:
+        text = f.read().decode('utf-8', errors='ignore')
 
-        # Regex balanceado (menos estricto que antes)
-        pattern = r'([A-Za-z0-9_]+URL)\x00.*?(https?://[^\x00]+?)\x00'
-        matches = re.finditer(pattern, text, re.IGNORECASE)
+    pattern = r'([A-Za-z0-9_]+URL)\x00.*?(https?://[^\x00]+?)\x00'
+    matches = re.finditer(pattern, text, re.IGNORECASE)
 
-        seen = set()
-        to_download = []
+    seen = set()
+    to_download = []
 
-        for match in matches:
-            field_name = match.group(1)
-            url = match.group(2).strip()
-
-            if not url.startswith(('http://', 'https://')) or url in seen or len(url) < 10:
-                continue
-
+    for match in matches:
+        field_name = match.group(1)
+        url = match.group(2).strip()
+        if (url.startswith(('http://', 'https://')) and url not in seen and len(url) > 15):
             seen.add(url)
             to_download.append((field_name, url))
 
-        print(f"Se encontraron {len(to_download)} URL validas para descargar.")
+    print(f"Se encontraron {len(to_download)} URLs para procesar.\n")
 
-    except Exception as e:
-        print(f"No se pudo procesar el archivo .bin: {e}")
-        to_download = []
+    csv_path = os.path.join(download_path, f"{workshop_id}_urls.csv")
+    csv_file = open(csv_path, 'w', encoding='utf-8-sig', newline='')
+    csv_writer = csv.writer(csv_file, delimiter=';')
+    csv_writer.writerow(['Campo', 'URL', 'Archivo'])
+    csv_file.flush()
 
-    # ==================== DESCARGAS ====================
-    print("\nIniciando descargas...\n")
-    csv_rows = []
-    successful = failed = 0
+    print("Iniciando descargas...\n")
+    successful = 0
+    invalid_ext = 0
+    failed = 0
     total = len(to_download)
+    
+    sleep_time = 0.15
+    session = requests.Session()
 
     for counter, (field_name, url) in enumerate(to_download, start=1):
         clean_url = clean_steam_url(url)
-        success, filename, clean_field = download_file(clean_url, download_path, field_name, counter, total)
+        result, clean_field = download_file(
+            clean_url, download_path, field_name, counter, total, 
+            csv_writer, csv_file, session
+        )
         
-        if success:
+        if result == "success":
             successful += 1
-            csv_rows.append([clean_field, clean_url])
-        else:
+        elif result == "invalid":
+            invalid_ext += 1
+        elif result == "failed":
             failed += 1
-        
-        time.sleep(0.6)
+            
+        time.sleep(sleep_time)
 
+    csv_file.close()
     try:
         os.remove(bin_path)
     except:
         pass
 
-    # Guardar CSV
-    if 'download_path' in locals() and download_path:
-        csv_path = os.path.join(download_path, f"{workshop_id or 'unknown'}_urls.csv")
-        try:
-            with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
-                csv.writer(f, delimiter=';').writerows(csv_rows)
-            print(f"\nCSV creado: {os.path.basename(csv_path)}")
-        except Exception as e:
-            print(f"Error al guardar CSV: {e}")
-
-    # ==================== RESUMEN FINAL ====================
-    print("\n" + "="*60)
+    print("\n" + "="*80)
     print("                     RESUMEN FINAL")
-    print("="*60)
-    print(f"Workshop ID         : {workshop_id}")
-    print(f"Nombre del mod      : {workshop_title}")
-    print(f"URLs encontradas    : {len(to_download)}")
-    print(f"Descargadas         : {successful}")
-    print(f"Fallidas            : {failed}")
-    if 'download_path' in locals() and download_path:
-        print(f"Directorio de descarga : {download_path}")
-    print("="*60)
+    print("="*80)
+    print(f"Workshop ID                         : {workshop_id}")
+    print(f"Nombre del mod                      : {workshop_title}")
+    print(f"Directorio                          : {download_path}")
+    print(f"URLs encontradas                    : {len(to_download)}")
+    print(f"Descargadas (validas)               : {successful}")
+    print(f"Eliminadas (extension invalida)     : {invalid_ext}")
+    print(f"Fallidas (error de descarga)        : {failed}")
+    print(f"CSV generado                        : {os.path.basename(csv_path)}")
+    print("="*80)
 
 
 if __name__ == "__main__":
